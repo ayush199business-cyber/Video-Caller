@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 
 // You will update this URL after `npx wrangler deploy` in the signaling-server folder
-const WS_SIGNALS_URL = import.meta.env.VITE_WS_URL || "wss://meetspace-signaling.ayush199business-cyber.workers.dev"; 
+const WS_SIGNALS_URL = import.meta.env.VITE_WS_URL || "wss://meetspace-signaling.ayush199business.workers.dev"; 
 
 export const useWebRTC = (roomId, localStream, username, isVideoEnabled, isAudioEnabled) => {
   const [peers, setPeers] = useState({}); // { [peerId]: { username } }

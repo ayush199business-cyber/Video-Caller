@@ -8,4 +8,4 @@ class_name = "WebSocketRoom"
 
 [[migrations]]
 tag = "v1"
-new_classes = ["WebSocketRoom"]
+new_sqlite_classes = ["WebSocketRoom"]
