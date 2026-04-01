@@ -1,127 +1,188 @@
 import { useState, useEffect, useRef } from 'react';
-import { joinRoom } from '@trystero-p2p/torrent';
 
-const APP_ID = 'minimal-video-caller-cf-pages';
+// You will update this URL after `npx wrangler deploy` in the signaling-server folder
+const WS_SIGNALS_URL = import.meta.env.VITE_WS_URL || "wss://meetspace-signaling.ayush199business-cyber.workers.dev"; 
 
 export const useWebRTC = (roomId, localStream, username, isVideoEnabled, isAudioEnabled) => {
   const [peers, setPeers] = useState({}); // { [peerId]: { username } }
   const [remoteStreams, setRemoteStreams] = useState({}); // { [peerId]: MediaStream }
   const [remoteStatuses, setRemoteStatuses] = useState({}); // { [peerId]: { video, audio } }
+
+  const socketRef = useRef(null);
+  const rtcConnections = useRef({}); // RTCPeerConnection objects
   
-  const roomRef = useRef(null);
   const localStreamRef = useRef(null);
   const usernameRef = useRef('');
   const statusRef = useRef({ video: true, audio: true });
+  
+  // Public Google STUN servers to bypass carrier NATs completely
+  const rtcConfig = {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' }
+    ]
+  };
 
-  // Update refs to avoid stale closures in event listeners
-  useEffect(() => {
-    localStreamRef.current = localStream;
-  }, [localStream]);
-
-  useEffect(() => {
-    usernameRef.current = username;
-  }, [username]);
-
-  useEffect(() => {
-    statusRef.current = { video: isVideoEnabled, audio: isAudioEnabled };
-  }, [isVideoEnabled, isAudioEnabled]);
+  useEffect(() => { localStreamRef.current = localStream; }, [localStream]);
+  useEffect(() => { usernameRef.current = username; }, [username]);
+  useEffect(() => { statusRef.current = { video: isVideoEnabled, audio: isAudioEnabled }; }, [isVideoEnabled, isAudioEnabled]);
 
   useEffect(() => {
     if (!roomId) return;
+    
+    // Connect to Cloudflare Worker WebSocket Signaling Backend
+    const myPeerId = crypto.randomUUID();
+    const wsUrl = `${WS_SIGNALS_URL}/room/${roomId}?peerId=${myPeerId}`;
+    const ws = new WebSocket(wsUrl);
+    socketRef.current = ws;
 
-    const room = joinRoom({ appId: APP_ID }, roomId);
-    roomRef.current = room;
+    const createPeerConnection = (targetPeerId, initiator) => {
+      if (rtcConnections.current[targetPeerId]) return rtcConnections.current[targetPeerId];
 
-    const [sendData, getData] = room.makeAction('peerData');
+      const pc = new RTCPeerConnection(rtcConfig);
+      rtcConnections.current[targetPeerId] = pc;
 
-    room.onPeerJoin(peerId => {
-      console.log(`Peer joined: ${peerId}`);
-      
-      // Send our latest state immediately using refs to avoid stale closures
-      sendData({ 
-        type: 'initialSync', 
-        username: usernameRef.current,
-        status: statusRef.current 
-      }, peerId);
-
-      // If we already have a stream when they join, share it directly with them
+      // Add our tracks natively
       if (localStreamRef.current) {
-        room.addStream(localStreamRef.current, peerId);
+        localStreamRef.current.getTracks().forEach(track => {
+          pc.addTrack(track, localStreamRef.current);
+        });
       }
-    });
 
-    getData((data, peerId) => {
-      if (data.type === 'initialSync' || data.type === 'updateStatus') {
-        if (data.username) {
-          setPeers(prev => ({ ...prev, [peerId]: { username: data.username } }));
+      // Handle ICE Candidate generations
+      pc.onicecandidate = (event) => {
+        if (event.candidate && ws.readyState === WebSocket.OPEN) {
+           ws.send(JSON.stringify({ type: 'candidate', targetPeerId, candidate: event.candidate }));
         }
-        if (data.status) {
-          setRemoteStatuses(prev => ({ ...prev, [peerId]: data.status }));
+      };
+
+      // Handle raw stream payload delivery
+      pc.ontrack = (event) => {
+         const remoteStream = event.streams[0];
+         if (remoteStream) {
+            setRemoteStreams(prev => ({ ...prev, [targetPeerId]: remoteStream }));
+            // Set default explicit unmuted states
+            setRemoteStatuses(prev => ({ ...prev, [targetPeerId]: { video: true, audio: true } }));
+         }
+      };
+
+      // SDP Negotiation
+      pc.onnegotiationneeded = async () => {
+         if (initiator) {
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            if (ws.readyState === WebSocket.OPEN) {
+               ws.send(JSON.stringify({ 
+                 type: 'offer', 
+                 targetPeerId, 
+                 sdp: pc.localDescription,
+                 username: usernameRef.current,
+                 status: statusRef.current 
+               }));
+            }
+         }
+      };
+
+      return pc;
+    };
+
+    ws.onmessage = async (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        
+        switch (msg.type) {
+          case 'room_state':
+             // Creates outgoing physical socket rails for everyone already inside
+             msg.peers.forEach(existingPeerId => {
+                createPeerConnection(existingPeerId, true);
+             });
+             break;
+             
+          case 'offer':
+             {
+                const { senderPeerId, sdp, username: peerUsername, status: peerStatus } = msg;
+                setPeers(prev => ({ ...prev, [senderPeerId]: { username: peerUsername || 'Anonymous' } }));
+                if (peerStatus) setRemoteStatuses(prev => ({ ...prev, [senderPeerId]: peerStatus }));
+
+                const pc = createPeerConnection(senderPeerId, false);
+                await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+                
+                if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ 
+                      type: 'answer', 
+                      targetPeerId: senderPeerId, 
+                      sdp: pc.localDescription,
+                      username: usernameRef.current,
+                      status: statusRef.current
+                    }));
+                }
+             }
+             break;
+             
+          case 'answer':
+             {
+                const { senderPeerId, sdp, username: peerUsername, status: peerStatus } = msg;
+                setPeers(prev => ({ ...prev, [senderPeerId]: { username: peerUsername || 'Anonymous' } }));
+                if (peerStatus) setRemoteStatuses(prev => ({ ...prev, [senderPeerId]: peerStatus }));
+                
+                const pc = rtcConnections.current[senderPeerId];
+                if (pc) await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+             }
+             break;
+             
+          case 'candidate':
+             {
+                const pc = rtcConnections.current[msg.senderPeerId];
+                if (pc) await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
+             }
+             break;
+             
+          case 'peer_leave':
+             {
+                const leftPeerId = msg.peerId;
+                if (rtcConnections.current[leftPeerId]) {
+                   rtcConnections.current[leftPeerId].close();
+                   delete rtcConnections.current[leftPeerId];
+                }
+                setPeers(prev => { const n={...prev}; delete n[leftPeerId]; return n; });
+                setRemoteStreams(prev => { const n={...prev}; delete n[leftPeerId]; return n; });
+                setRemoteStatuses(prev => { const n={...prev}; delete n[leftPeerId]; return n; });
+             }
+             break;
+             
+          case 'status_update':
+             {
+                setRemoteStatuses(prev => ({ ...prev, [msg.senderPeerId]: msg.status }));
+             }
+             break;
         }
+      } catch (err) {
+         console.warn("WS Message parse error:", err);
       }
-    });
-
-    room.onPeerLeave(peerId => {
-      console.log(`Peer left: ${peerId}`);
-      setPeers(prev => {
-        const next = { ...prev };
-        delete next[peerId];
-        return next;
-      });
-      setRemoteStreams(prev => {
-        const next = { ...prev };
-        delete next[peerId];
-        return next;
-      });
-      setRemoteStatuses(prev => {
-        const next = { ...prev };
-        delete next[peerId];
-        return next;
-      });
-    });
-
-    room.onPeerStream((stream, peerId) => {
-      console.log(`Received stream from: ${peerId}`);
-      setRemoteStreams(prev => ({ ...prev, [peerId]: stream }));
-      // Assume newly received stream is active until told otherwise
-      setRemoteStatuses(prev => ({ 
-        ...prev, 
-        [peerId]: { video: true, audio: true } 
-      }));
-    });
+    };
 
     return () => {
-      room.leave();
+      if (socketRef.current) socketRef.current.close();
+      Object.values(rtcConnections.current).forEach(pc => pc.close());
+      rtcConnections.current = {};
       setPeers({});
       setRemoteStreams({});
       setRemoteStatuses({});
     };
   }, [roomId]);
 
-  // Broadcast local stream to EVERYONE newly
-  // Runs only when localStream reference changes (i.e. starts the very first time)
-  useEffect(() => {
-    if (roomRef.current && localStream) {
-      try {
-        roomRef.current.addStream(localStream);
-      } catch (e) {
-        console.error("Failed to add stream globally:", e);
-      }
-    }
-  }, [localStream]);
 
-  // Broadcast status changes locally to all peers when toggles change
+  // Synchronize media unmounts over Central Auth Channel
   useEffect(() => {
-    if (roomRef.current && peers) {
-       const [sendData] = roomRef.current.makeAction('peerData');
-       try {
-         // Sending without target peerId broadcasts to everyone
-         sendData({ type: 'updateStatus', status: { video: isVideoEnabled, audio: isAudioEnabled } });
-       } catch (e) {
-         // ignore if room isn't ready
-       }
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+       socketRef.current.send(JSON.stringify({ 
+         type: 'status_update', 
+         status: { video: isVideoEnabled, audio: isAudioEnabled } 
+       }));
     }
-  }, [isVideoEnabled, isAudioEnabled, peers]); // dependencies needed so we broadcast to whoever is there
+  }, [isVideoEnabled, isAudioEnabled]);
 
   return { peers, remoteStreams, remoteStatuses };
 };
