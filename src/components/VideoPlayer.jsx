@@ -12,20 +12,24 @@ export const VideoPlayer = ({ stream, isLocal, username, isAudioMuted, isVideoEn
 
   return (
     <div className="relative flex items-center justify-center w-full h-full bg-gray-900 rounded-xl overflow-hidden shadow-lg border border-gray-800">
-      {stream && isVideoEnabled ? (
+      {/* ALWAYS render the video element if stream exists so AUDIO continues to play even if video is visually 'off' */}
+      {stream && (
         <video
           ref={videoRef}
-          className={`w-full h-full object-cover ${isLocal ? 'scale-x-[-1]' : ''}`} // Mirror local video
+          className={`w-full h-full object-cover ${isLocal ? 'scale-x-[-1]' : ''} ${!isVideoEnabled ? 'hidden' : ''}`}
           autoPlay
           playsInline
-          muted={isLocal} // Never hear yourself
+          muted={isLocal}
         />
-      ) : (
-        <div className="flex flex-col items-center justify-center text-gray-500">
-          <div className="w-20 h-20 bg-gray-800 rounded-full flex items-center justify-center mb-4 text-2xl font-semibold text-gray-400">
+      )}
+
+      {/* Render the Avatar overlay when video is off */}
+      {(!stream || !isVideoEnabled) && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 text-gray-500 z-10">
+          <div className="w-20 h-20 bg-gray-800 rounded-full flex items-center justify-center mb-4 text-2xl font-semibold text-gray-400 shadow-inner">
             {username ? username.charAt(0).toUpperCase() : '?'}
           </div>
-          <p>Camera Off</p>
+          <p className="font-medium">Camera Off</p>
         </div>
       )}
 
