@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, X } from 'lucide-react';
 
-const ChatPanel = ({ messages, onSendMessage, onClose }) => {
+const ChatPanel = ({ messages, onSendMessage, onClose, isEmbedded = false }) => {
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef(null);
 
@@ -21,21 +21,8 @@ const ChatPanel = ({ messages, onSendMessage, onClose }) => {
     }
   };
 
-  return (
-    <div className="flex flex-col w-full md:w-80 h-full bg-gray-900/40 backdrop-blur-xl border-l border-white/10 shadow-2xl relative animate-in slide-in-from-right duration-300">
-      {/* Header */}
-      <div className="p-4 border-b border-white/10 flex items-center justify-between bg-gray-800/20">
-        <h3 className="font-semibold text-white flex items-center gap-2 text-lg">
-          In-Call Messages
-        </h3>
-        <button 
-          onClick={onClose}
-          className="p-1 hover:bg-white/10 rounded-lg transition-colors text-gray-400 hover:text-white"
-        >
-          <X size={20} />
-        </button>
-      </div>
-
+  const Content = (
+    <>
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-gray-800 scrollbar-track-transparent">
         {messages.length === 0 ? (
@@ -91,8 +78,29 @@ const ChatPanel = ({ messages, onSendMessage, onClose }) => {
           </button>
         </div>
       </form>
+    </>
+  );
+
+  if (isEmbedded) return <div className="flex-1 flex flex-col overflow-hidden">{Content}</div>;
+
+  return (
+    <div className="flex flex-col w-full md:w-80 h-full bg-gray-900/40 backdrop-blur-xl border-l border-white/10 shadow-2xl relative animate-in slide-in-from-right duration-300">
+      {/* Header */}
+      <div className="p-4 border-b border-white/10 flex items-center justify-between bg-gray-800/20">
+        <h3 className="font-semibold text-white flex items-center gap-2 text-lg">
+          In-Call Messages
+        </h3>
+        <button 
+          onClick={onClose}
+          className="p-1 hover:bg-white/10 rounded-lg transition-colors text-gray-400 hover:text-white"
+        >
+          <X size={20} />
+        </button>
+      </div>
+      {Content}
     </div>
   );
 };
+
 
 export default ChatPanel;

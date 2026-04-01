@@ -172,6 +172,26 @@ export const useWebRTC = (roomId, localStream, username, isVideoEnabled, isAudio
              }
              break;
 
+          case 'hand_raise':
+             {
+                setRemoteStatuses(prev => ({
+                   ...prev,
+                   [msg.senderPeerId]: { ...prev[msg.senderPeerId], isHandRaised: msg.isRaised }
+                }));
+             }
+             break;
+
+          case 'reaction':
+             {
+                // This will be handled by the UI listening to remoteStatuses or a specific reaction event
+                setRemoteStatuses(prev => ({
+                   ...prev,
+                   [msg.senderPeerId]: { ...prev[msg.senderPeerId], lastReaction: msg.emoji, reactionId: Date.now() }
+                }));
+             }
+             break;
+
+
         }
       } catch (err) {
          console.warn("WS Message parse error:", err);
@@ -199,24 +219,36 @@ export const useWebRTC = (roomId, localStream, username, isVideoEnabled, isAudio
     }
   }, [isVideoEnabled, isAudioEnabled]);
 
-  // Aggressively bind live media streams to connections even if the camera boots up late
-  useEffect(() => {
-    if (localStream) {
-      Object.values(rtcConnections.current).forEach(pc => {
-        const existingSenders = pc.getSenders();
-        localStream.getTracks().forEach(track => {
-           // Prevent double-adding identically referenced tracks
-          if (!existingSenders.find(s => s.track && s.track.id === track.id)) {
+   // Aggressively bind live media streams to connections and handle track replacement (Screen Sharing)
+   useEffect(() => {
+     if (localStream) {
+       const newVideoTrack = localStream.getVideoTracks()[0];
+       const newAudioTrack = localStream.getAudioTracks()[0];
+
+       Object.values(rtcConnections.current).forEach(async (pc) => {
+         const senders = pc.getSenders();
+         
+         // 1. Handle Video Track Replacement
+         const videoSender = senders.find(s => s.track?.kind === 'video');
+         if (videoSender && newVideoTrack && videoSender.track !== newVideoTrack) {
             try {
-               pc.addTrack(track, localStream);
+               await videoSender.replaceTrack(newVideoTrack);
             } catch (e) {
-               console.warn("Track already added implicitly:", e);
+               console.error("Failed to replace video track:", e);
             }
-          }
-        });
-      });
-    }
-  }, [localStream]);
+         } else if (!videoSender && newVideoTrack) {
+            pc.addTrack(newVideoTrack, localStream);
+         }
+
+         // 2. Handle Audio Track (Ensure it's added if missing)
+         const audioSender = senders.find(s => s.track?.kind === 'audio');
+         if (!audioSender && newAudioTrack) {
+            pc.addTrack(newAudioTrack, localStream);
+         }
+       });
+     }
+   }, [localStream]);
+
 
   const sendChatMessage = (text) => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
@@ -233,6 +265,19 @@ export const useWebRTC = (roomId, localStream, username, isVideoEnabled, isAudio
     }
   };
 
-  return { peers, remoteStreams, remoteStatuses, messages, sendChatMessage };
+  const sendReaction = (emoji) => {
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ type: 'reaction', emoji }));
+    }
+  };
+
+  const raiseHand = (isRaised) => {
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ type: 'hand_raise', isRaised }));
+    }
+  };
+
+  return { peers, remoteStreams, remoteStatuses, messages, sendChatMessage, sendReaction, raiseHand };
 };
+
 
