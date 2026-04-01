@@ -5,13 +5,19 @@ export const useMedia = () => {
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [error, setError] = useState(null);
+  
+  const streamRef = useRef(null);
 
   const startMedia = useCallback(async () => {
+    // Prevent starting if already active
+    if (streamRef.current) return streamRef.current;
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
         audio: true
       });
+      streamRef.current = stream;
       setLocalStream(stream);
       return stream;
     } catch (err) {
@@ -22,31 +28,32 @@ export const useMedia = () => {
   }, []);
 
   const stopMedia = useCallback(() => {
-    if (localStream) {
-      localStream.getTracks().forEach(track => track.stop());
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
       setLocalStream(null);
     }
-  }, [localStream]);
+  }, []); // NO dependencies! This is completely stable now.
 
   const toggleVideo = useCallback(() => {
-    if (localStream) {
-      const videoTrack = localStream.getVideoTracks()[0];
+    if (streamRef.current) {
+      const videoTrack = streamRef.current.getVideoTracks()[0];
       if (videoTrack) {
         videoTrack.enabled = !videoTrack.enabled;
         setIsVideoEnabled(videoTrack.enabled);
       }
     }
-  }, [localStream]);
+  }, []);
 
   const toggleAudio = useCallback(() => {
-    if (localStream) {
-      const audioTrack = localStream.getAudioTracks()[0];
+    if (streamRef.current) {
+      const audioTrack = streamRef.current.getAudioTracks()[0];
       if (audioTrack) {
         audioTrack.enabled = !audioTrack.enabled;
         setIsAudioEnabled(audioTrack.enabled);
       }
     }
-  }, [localStream]);
+  }, []);
 
   // Clean up on unmount
   useEffect(() => {

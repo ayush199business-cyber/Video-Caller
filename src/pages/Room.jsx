@@ -34,7 +34,7 @@ export const Room = () => {
   } = useMedia();
 
   // Handle WebRTC Peers
-  const { peers, remoteStreams } = useWebRTC(roomId, localStream, username);
+  const { peers, remoteStreams, remoteStatuses } = useWebRTC(roomId, localStream, username, isVideoEnabled, isAudioEnabled);
 
   // Start media directly on load
   useEffect(() => {
@@ -65,14 +65,16 @@ export const Room = () => {
       stream: localStream,
       isLocal: true,
       username: username + '',
-      isAudioMuted: !isAudioEnabled
+      isAudioMuted: !isAudioEnabled,
+      isVideoEnabled: isVideoEnabled
     },
     ...Object.entries(peers).map(([peerId, peerData]) => ({
       id: peerId,
       stream: remoteStreams[peerId],
       isLocal: false,
       username: peerData.username,
-      isAudioMuted: false // We can only mute ourselves, remote streams are controlled by them natively
+      isAudioMuted: !(remoteStatuses[peerId]?.audio ?? true),
+      isVideoEnabled: remoteStatuses[peerId]?.video ?? true 
     }))
   ];
 
@@ -145,6 +147,7 @@ export const Room = () => {
                 isLocal={participant.isLocal}
                 username={participant.username}
                 isAudioMuted={participant.isAudioMuted}
+                isVideoEnabled={participant.isVideoEnabled}
               />
             </div>
           ))}

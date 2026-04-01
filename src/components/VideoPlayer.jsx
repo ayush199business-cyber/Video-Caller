@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { MicOff } from 'lucide-react';
 
-export const VideoPlayer = ({ stream, isLocal, username, isAudioMuted }) => {
+export const VideoPlayer = ({ stream, isLocal, username, isAudioMuted, isVideoEnabled = true }) => {
   const videoRef = useRef(null);
 
   useEffect(() => {
@@ -12,7 +12,7 @@ export const VideoPlayer = ({ stream, isLocal, username, isAudioMuted }) => {
 
   return (
     <div className="relative flex items-center justify-center w-full h-full bg-gray-900 rounded-xl overflow-hidden shadow-lg border border-gray-800">
-      {stream ? (
+      {stream && isVideoEnabled ? (
         <video
           ref={videoRef}
           className={`w-full h-full object-cover ${isLocal ? 'scale-x-[-1]' : ''}`} // Mirror local video
