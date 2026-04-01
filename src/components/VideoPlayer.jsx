@@ -6,17 +6,29 @@ export const VideoPlayer = ({ stream, isLocal, username, isAudioMuted, isVideoEn
 
   useEffect(() => {
     if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream;
+      const videoEl = videoRef.current;
+      videoEl.srcObject = stream;
+      
+      // Override React reconciler bugs by enforcing hardware values DOM-side
+      videoEl.muted = isLocal;
+      videoEl.volume = 1;
+      
+      // Explicit play is MANDATORY for WebRTC streams arriving asynchronously
+      // Otherwise Safari/Chrome strictly pause the stream thread waiting for user clicks
+      videoEl.play().catch(err => {
+        console.warn("Browser blocked autoplay for peer:", username, err);
+      });
     }
-  }, [stream]);
+  }, [stream, isLocal, username]);
 
   return (
     <div className="relative flex items-center justify-center w-full h-full bg-gray-900 rounded-xl overflow-hidden shadow-lg border border-gray-800">
       {/* ALWAYS render the video element if stream exists so AUDIO continues to play even if video is visually 'off' */}
+      {/* Replaced 'hidden' with absolute transparent 1-pixel technique so OS doesn't sleep the media process */}
       {stream && (
         <video
           ref={videoRef}
-          className={`w-full h-full object-cover ${isLocal ? 'scale-x-[-1]' : ''} ${!isVideoEnabled ? 'hidden' : ''}`}
+          className={`w-full h-full object-cover ${isLocal ? 'scale-x-[-1]' : ''} ${!isVideoEnabled ? 'opacity-0 absolute w-px h-px pointer-events-none' : ''}`}
           autoPlay
           playsInline
           muted={isLocal}
@@ -33,16 +45,14 @@ export const VideoPlayer = ({ stream, isLocal, username, isAudioMuted, isVideoEn
         </div>
       )}
 
-      {/* Overlay - Username and Status */}
-      <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between">
-        <div className="bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg text-sm text-white font-medium flex items-center gap-2">
-          <span className="truncate max-w-[150px]">{username || 'Guest'}</span>
-          {isLocal && <span className="text-xs text-gray-400 ml-1">(You)</span>}
+      {/* Overlays */}
+      <div className="absolute bottom-4 left-4 flex gap-2">
+        <div className="bg-black/60 px-3 py-1.5 rounded-lg text-sm font-medium text-white backdrop-blur-sm border border-white/10 shadow-sm flex items-center gap-2">
+          {username} {isLocal && "(You)"}
         </div>
-        
         {isAudioMuted && (
-          <div className="bg-red-500/80 backdrop-blur-md p-1.5 rounded-lg text-white">
-            <MicOff size={16} />
+          <div className="bg-red-500/80 p-1.5 rounded-lg text-white backdrop-blur-sm border border-red-500/50 shadow-sm flex items-center justify-center">
+             <MicOff size={16} />
           </div>
         )}
       </div>
