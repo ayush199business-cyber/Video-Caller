@@ -7,6 +7,8 @@ export const useWebRTC = (roomId, localStream, username, isVideoEnabled, isAudio
   const [peers, setPeers] = useState({}); // { [peerId]: { username } }
   const [remoteStreams, setRemoteStreams] = useState({}); // { [peerId]: MediaStream }
   const [remoteStatuses, setRemoteStatuses] = useState({}); // { [peerId]: { video, audio } }
+  const [messages, setMessages] = useState([]); // Array of { sender, text, timestamp, isLocal }
+
 
   const socketRef = useRef(null);
   const rtcConnections = useRef({}); // RTCPeerConnection objects
@@ -157,6 +159,19 @@ export const useWebRTC = (roomId, localStream, username, isVideoEnabled, isAudio
                 setRemoteStatuses(prev => ({ ...prev, [msg.senderPeerId]: msg.status }));
              }
              break;
+             
+          case 'chat':
+             {
+                const senderName = peers[msg.senderPeerId]?.username || 'Anonymous';
+                setMessages(prev => [...prev, { 
+                  sender: senderName, 
+                  text: msg.text, 
+                  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  isLocal: false 
+                }]);
+             }
+             break;
+
         }
       } catch (err) {
          console.warn("WS Message parse error:", err);
@@ -203,5 +218,21 @@ export const useWebRTC = (roomId, localStream, username, isVideoEnabled, isAudio
     }
   }, [localStream]);
 
-  return { peers, remoteStreams, remoteStatuses };
+  const sendChatMessage = (text) => {
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({
+        type: 'chat',
+        text
+      }));
+      setMessages(prev => [...prev, {
+        sender: 'You',
+        text,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        isLocal: true
+      }]);
+    }
+  };
+
+  return { peers, remoteStreams, remoteStatuses, messages, sendChatMessage };
 };
+

@@ -1,8 +1,8 @@
 import React from 'react';
-import { Mic, MicOff, Video, VideoOff, PhoneOff } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, PhoneOff, MessageSquare } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-export const Controls = ({ isAudioEnabled, isVideoEnabled, toggleAudio, toggleVideo, stopMedia }) => {
+export const Controls = ({ isAudioEnabled, isVideoEnabled, isChatOpen, toggleAudio, toggleVideo, toggleChat, stopMedia }) => {
   const navigate = useNavigate();
 
   const handleLeave = () => {
@@ -38,6 +38,20 @@ export const Controls = ({ isAudioEnabled, isVideoEnabled, toggleAudio, toggleVi
       >
         {isVideoEnabled ? <Video size={24} /> : <VideoOff size={24} />}
       </button>
+
+      {/* Chat Toggle */}
+      <button
+        onClick={toggleChat}
+        className={`p-4 rounded-2xl transition duration-300 flex items-center justify-center relative ${
+          isChatOpen 
+            ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)]' 
+            : 'bg-gray-800 hover:bg-gray-700 text-white'
+        }`}
+        title={isChatOpen ? 'Close Chat' : 'Open Chat'}
+      >
+        <MessageSquare size={24} />
+      </button>
+
 
       {/* Leave Call */}
       <button

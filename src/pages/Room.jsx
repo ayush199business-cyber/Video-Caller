@@ -5,6 +5,7 @@ import { useMedia } from '../hooks/useMedia';
 import { useWebRTC } from '../hooks/useWebRTC';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { Controls } from '../components/Controls';
+import ChatPanel from '../components/ChatPanel';
 import { copyToClipboard } from '../utils/helpers';
 
 export const Room = () => {
@@ -13,6 +14,8 @@ export const Room = () => {
   const navigate = useNavigate();
   const username = location.state?.username;
   const [copied, setCopied] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+
 
   // If someone lands here directly without a username, redirect back to home
   useEffect(() => {
@@ -34,7 +37,14 @@ export const Room = () => {
   } = useMedia();
 
   // Handle WebRTC Peers
-  const { peers, remoteStreams, remoteStatuses } = useWebRTC(roomId, localStream, username, isVideoEnabled, isAudioEnabled);
+  const { 
+    peers, 
+    remoteStreams, 
+    remoteStatuses, 
+    messages, 
+    sendChatMessage 
+  } = useWebRTC(roomId, localStream, username, isVideoEnabled, isAudioEnabled);
+
 
   // Start media directly on load
   useEffect(() => {
@@ -55,6 +65,9 @@ export const Room = () => {
       setTimeout(() => setCopied(false), 2000);
     }
   };
+
+  const toggleChat = () => setIsChatOpen(!isChatOpen);
+
 
   if (!username) return null; // Wait for redirect
 
@@ -121,47 +134,64 @@ export const Room = () => {
       </div>
 
       {/* Main Grid Area */}
-      <div className="flex-grow w-full h-full p-4 sm:p-8 flex items-center justify-center -mt-8 sm:-mt-0">
+      <div className="flex-grow w-full h-full flex overflow-hidden">
         
-        {mediaError && (
-          <div className="absolute top-24 left-1/2 -translate-x-1/2 bg-red-500/20 text-red-500 border border-red-500/50 px-6 py-3 rounded-2xl z-50 backdrop-blur-md shadow-lg">
-            {mediaError}
-          </div>
-        )}
-
-        {displayParticipants.length === 1 && (
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 text-center pointer-events-none opacity-50">
-             <div className="bg-gray-800/50 inline-block p-4 rounded-full mb-4">
-                <Users size={32} />
-             </div>
-             <p className="text-lg font-medium">Waiting for others to join...</p>
-             <p className="text-sm mt-2 font-mono bg-black/40 px-3 py-1 rounded inline-block border border-gray-700">{roomId}</p>
-          </div>
-        )}
-
-        <div className={`grid gap-4 w-full max-w-7xl h-full max-h-[85vh] mt-16 sm:mt-10 pb-20 ${getGridClass(displayParticipants.length)} transition-all auto-rows-fr`}>
-          {displayParticipants.map((participant) => (
-            <div key={participant.id} className="w-full h-full relative">
-              <VideoPlayer 
-                stream={participant.stream} 
-                isLocal={participant.isLocal}
-                username={participant.username}
-                isAudioMuted={participant.isAudioMuted}
-                isVideoEnabled={participant.isVideoEnabled}
-              />
+        <div className={`flex-grow h-full p-4 sm:p-8 flex items-center justify-center relative transition-all duration-300 ${isChatOpen ? 'pr-4 md:pr-0' : ''}`}>
+          {mediaError && (
+            <div className="absolute top-24 left-1/2 -translate-x-1/2 bg-red-500/20 text-red-500 border border-red-500/50 px-6 py-3 rounded-2xl z-50 backdrop-blur-md shadow-lg">
+              {mediaError}
             </div>
-          ))}
+          )}
+
+          {displayParticipants.length === 1 && (
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 text-center pointer-events-none opacity-50">
+               <div className="bg-gray-800/50 inline-block p-4 rounded-full mb-4">
+                  <Users size={32} />
+               </div>
+               <p className="text-lg font-medium">Waiting for others to join...</p>
+               <p className="text-sm mt-2 font-mono bg-black/40 px-3 py-1 rounded inline-block border border-gray-700">{roomId}</p>
+            </div>
+          )}
+
+          <div className={`grid gap-4 w-full h-full max-h-[85vh] mt-16 sm:mt-10 pb-20 ${getGridClass(displayParticipants.length)} transition-all auto-rows-fr`}>
+            {displayParticipants.map((participant) => (
+              <div key={participant.id} className="w-full h-full relative">
+                <VideoPlayer 
+                  stream={participant.stream} 
+                  isLocal={participant.isLocal}
+                  username={participant.username}
+                  isAudioMuted={participant.isAudioMuted}
+                  isVideoEnabled={participant.isVideoEnabled}
+                />
+              </div>
+            ))}
+          </div>
         </div>
+
+        {/* Right Chat Panel */}
+        {isChatOpen && (
+          <div className="fixed inset-y-0 right-0 w-full md:relative md:w-80 h-full z-50 md:z-30">
+            <ChatPanel 
+              messages={messages} 
+              onSendMessage={sendChatMessage} 
+              onClose={() => setIsChatOpen(false)} 
+            />
+          </div>
+        )}
       </div>
+
 
       {/* Controls */}
       <Controls 
         isAudioEnabled={isAudioEnabled}
         isVideoEnabled={isVideoEnabled}
+        isChatOpen={isChatOpen}
         toggleAudio={toggleAudio}
         toggleVideo={toggleVideo}
+        toggleChat={toggleChat}
         stopMedia={stopMedia}
       />
+
     </div>
   );
 };
