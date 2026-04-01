@@ -184,5 +184,24 @@ export const useWebRTC = (roomId, localStream, username, isVideoEnabled, isAudio
     }
   }, [isVideoEnabled, isAudioEnabled]);
 
+  // Aggressively bind live media streams to connections even if the camera boots up late
+  useEffect(() => {
+    if (localStream) {
+      Object.values(rtcConnections.current).forEach(pc => {
+        const existingSenders = pc.getSenders();
+        localStream.getTracks().forEach(track => {
+           // Prevent double-adding identically referenced tracks
+          if (!existingSenders.find(s => s.track && s.track.id === track.id)) {
+            try {
+               pc.addTrack(track, localStream);
+            } catch (e) {
+               console.warn("Track already added implicitly:", e);
+            }
+          }
+        });
+      });
+    }
+  }, [localStream]);
+
   return { peers, remoteStreams, remoteStatuses };
 };
