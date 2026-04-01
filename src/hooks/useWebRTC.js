@@ -176,17 +176,16 @@ export const useWebRTC = (roomId, localStream, username, isVideoEnabled, isAudio
              {
                 setRemoteStatuses(prev => ({
                    ...prev,
-                   [msg.senderPeerId]: { ...prev[msg.senderPeerId], isHandRaised: msg.isRaised }
+                   [msg.senderPeerId]: { ...(prev[msg.senderPeerId] || { video: true, audio: true }), isHandRaised: msg.isRaised }
                 }));
              }
              break;
 
           case 'reaction':
              {
-                // This will be handled by the UI listening to remoteStatuses or a specific reaction event
                 setRemoteStatuses(prev => ({
                    ...prev,
-                   [msg.senderPeerId]: { ...prev[msg.senderPeerId], lastReaction: msg.emoji, reactionId: Date.now() }
+                   [msg.senderPeerId]: { ...(prev[msg.senderPeerId] || { video: true, audio: true }), lastReaction: msg.emoji, reactionId: Date.now() }
                 }));
              }
              break;

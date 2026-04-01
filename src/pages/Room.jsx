@@ -38,6 +38,8 @@ export const Room = () => {
     stopMedia,
     toggleVideo,
     toggleAudio,
+    toggleScreenShare,
+    isScreenSharing,
     error: mediaError
   } = useMedia();
 
@@ -241,7 +243,7 @@ export const Room = () => {
         isAudioEnabled={isAudioEnabled}
         isVideoEnabled={isVideoEnabled}
         isChatOpen={isChatOpen}
-        isScreenSharing={localStream?.getVideoTracks()[0]?.label?.toLowerCase().includes('screen')}
+        isScreenSharing={isScreenSharing}
         isHandRaised={isHandRaised}
         toggleAudio={toggleAudio}
         toggleVideo={toggleVideo}
