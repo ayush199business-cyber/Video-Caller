@@ -2,12 +2,14 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 
 export const useMedia = () => {
   const [localStream, setLocalStream] = useState(null);
+  const [screenStream, setScreenStream] = useState(null);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [error, setError] = useState(null);
   
   const streamRef = useRef(null);
+  const screenStreamRef = useRef(null);
   const cameraVideoTrackRef = useRef(null);
 
   const startMedia = useCallback(async () => {
@@ -16,7 +18,11 @@ export const useMedia = () => {
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
+        video: { 
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          facingMode: "user"
+        },
         audio: true
       });
       streamRef.current = stream;
@@ -36,7 +42,13 @@ export const useMedia = () => {
       streamRef.current = null;
       setLocalStream(null);
     }
-  }, []); // NO dependencies! This is completely stable now.
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach(track => track.stop());
+      screenStreamRef.current = null;
+      setScreenStream(null);
+      setIsScreenSharing(false);
+    }
+  }, []);
 
   const toggleVideo = useCallback(() => {
     if (streamRef.current) {
@@ -59,58 +71,47 @@ export const useMedia = () => {
   }, []);
 
   const toggleScreenShare = useCallback(async () => {
-    if (!streamRef.current) return;
-
     if (isScreenSharing) {
-      // Stop screen sharing and revert to camera
-      const currentVideoTrack = streamRef.current.getVideoTracks()[0];
-      if (currentVideoTrack) currentVideoTrack.stop();
-
-      if (cameraVideoTrackRef.current) {
-        // Re-enable original camera track
-        const newStream = new MediaStream([cameraVideoTrackRef.current, ...streamRef.current.getAudioTracks()]);
-        streamRef.current = newStream;
-        setLocalStream(newStream);
-        setIsScreenSharing(false);
-        setIsVideoEnabled(true);
-      } else {
-        // If for some reason camera track was lost, try to restart media
-        const freshStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        streamRef.current = freshStream;
-        cameraVideoTrackRef.current = freshStream.getVideoTracks()[0];
-        setLocalStream(freshStream);
-        setIsScreenSharing(false);
-        setIsVideoEnabled(true);
+      // Stop screen sharing but KEEP camera active
+      if (screenStreamRef.current) {
+        screenStreamRef.current.getTracks().forEach(track => track.stop());
+        screenStreamRef.current = null;
       }
+      setScreenStream(null);
+      setIsScreenSharing(false);
     } else {
       // Start screen sharing
       try {
-        const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-        const screenTrack = screenStream.getVideoTracks()[0];
-
-        // Store original camera track to revert later
-        cameraVideoTrackRef.current = streamRef.current.getVideoTracks()[0];
-
-        // Create new combined stream
-        const newStream = new MediaStream([screenTrack, ...streamRef.current.getAudioTracks()]);
-        
-        // Handle "Stop Sharing" button in browser UI
-        screenTrack.onended = () => {
-          toggleScreenShare(); // Revert back to camera
+        // Mobile Chrome Fix: audio: false and specific video constraints
+        const displayMediaOptions = {
+          video: {
+            cursor: "always",
+            displaySurface: "monitor" 
+          },
+          audio: false // Avoid audio constraints on mobile screen share
         };
 
-        streamRef.current = newStream;
-        setLocalStream(newStream);
+        const screen = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
+        const screenTrack = screen.getVideoTracks()[0];
+
+        // Handle "Stop Sharing" button in browser UI
+        screenTrack.onended = () => {
+          setScreenStream(null);
+          setIsScreenSharing(false);
+          screenStreamRef.current = null;
+        };
+
+        screenStreamRef.current = screen;
+        setScreenStream(screen);
         setIsScreenSharing(true);
-        setIsVideoEnabled(true);
       } catch (err) {
         console.error("Screen share error:", err);
         if (err.name !== 'NotAllowedError') {
-          setError("Failed to start screen sharing.");
+          setError("Failed to start screen sharing. Ensure you are on a secure connection (HTTPS).");
         }
       }
     }
-  }, [isScreenSharing, stopMedia]);
+  }, [isScreenSharing]);
 
   // Clean up on unmount
   useEffect(() => {
@@ -121,6 +122,7 @@ export const useMedia = () => {
 
   return {
     localStream,
+    screenStream,
     isVideoEnabled,
     isAudioEnabled,
     startMedia,

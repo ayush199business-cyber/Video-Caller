@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { Copy, CheckCircle2, Users } from 'lucide-react';
+import { Copy, CheckCircle2, Users, Hand, Monitor, X } from 'lucide-react';
 import { useMedia } from '../hooks/useMedia';
 import { useWebRTC } from '../hooks/useWebRTC';
 import { VideoPlayer } from '../components/VideoPlayer';
@@ -16,22 +16,19 @@ export const Room = () => {
   const username = location.state?.username;
   const [copied, setCopied] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [isParticipantsOpen, setIsParticipantsOpen] = useState(false);
+  const [isParticipantsOpen, setIsParticipantsOpen] = useState(true); // Default open for the new UI
   const [theme, setTheme] = useState('dark');
   const [isHandRaised, setIsHandRaised] = useState(false);
 
-
-
-  // If someone lands here directly without a username, redirect back to home
-  useEffect(() => {
-    if (!username) {
-      navigate('/', { replace: true });
-    }
-  }, [username, navigate]);
+  // New Interface States
+  const [activeParticipantId, setActiveParticipantId] = useState('local');
+  const [panelSide, setPanelSide] = useState('right');
+  const [panelStartIndex, setPanelStartIndex] = useState(0);
 
   // Handle local media
   const {
     localStream,
+    screenStream,
     isVideoEnabled,
     isAudioEnabled,
     startMedia,
@@ -47,23 +44,20 @@ export const Room = () => {
   const { 
     peers, 
     remoteStreams, 
+    remoteScreenStreams,
     remoteStatuses, 
     messages, 
     sendChatMessage,
     sendReaction,
     raiseHand
-  } = useWebRTC(roomId, localStream, username, isVideoEnabled, isAudioEnabled);
-
-
+  } = useWebRTC(roomId, localStream, screenStream, username, isVideoEnabled, isAudioEnabled);
 
   // Start media directly on load
   useEffect(() => {
-    let active = true;
     if (username) {
       startMedia();
     }
     return () => {
-      active = false;
       stopMedia();
     };
   }, [username, startMedia, stopMedia]);
@@ -77,7 +71,6 @@ export const Room = () => {
   };
 
   const toggleChat = () => {
-
     setIsChatOpen(!isChatOpen);
     if (isParticipantsOpen) setIsParticipantsOpen(false);
   };
@@ -94,59 +87,82 @@ export const Room = () => {
     raiseHand(val);
   };
 
+  if (!username) return null;
 
-
-  if (!username) return null; // Wait for redirect
-
-  // Combine local and remote streams for rendering
-  const allParticipants = [
+  // Build the list of all "viewable" items (Participants + Screens)
+  const viewableItems = [
     {
       id: 'local',
+      type: 'camera',
       stream: localStream,
+      username: username,
       isLocal: true,
-      username: username + '',
+      isVideoEnabled,
       isAudioMuted: !isAudioEnabled,
-      isVideoEnabled: isVideoEnabled,
-      isHandRaised: isHandRaised,
-      lastReaction: null,
-      reactionId: null
-    },
-    ...Object.entries(peers).map(([peerId, peerData]) => ({
-      id: peerId,
-      stream: remoteStreams[peerId],
-      isLocal: false,
-      username: peerData.username,
-      isAudioMuted: !(remoteStatuses[peerId]?.audio ?? true),
-      isVideoEnabled: remoteStatuses[peerId]?.video ?? true,
-      isHandRaised: remoteStatuses[peerId]?.isHandRaised ?? false,
-      lastReaction: remoteStatuses[peerId]?.lastReaction,
-      reactionId: remoteStatuses[peerId]?.reactionId
-    }))
+      isHandRaised,
+      status: { video: isVideoEnabled, audio: isAudioEnabled }
+    }
   ];
 
+  if (screenStream) {
+    viewableItems.push({
+      id: 'local-screen',
+      type: 'screen',
+      stream: screenStream,
+      username: `${username}'s Screen`,
+      isLocal: true,
+      isVideoEnabled: true,
+      isAudioMuted: true,
+      status: { video: true, audio: false }
+    });
+  }
 
-  // Restrict to max 5 users total (1 local + up to 4 remote)
-  const displayParticipants = allParticipants.slice(0, 5);
+  Object.entries(peers).forEach(([peerId, peerData]) => {
+    const status = remoteStatuses[peerId] || { video: true, audio: true };
+    
+    // Add Camera view
+    viewableItems.push({
+      id: peerId,
+      type: 'camera',
+      stream: remoteStreams[peerId],
+      username: peerData.username,
+      isLocal: false,
+      isVideoEnabled: status.video,
+      isAudioMuted: !status.audio,
+      isHandRaised: status.isHandRaised,
+      status: status
+    });
 
-  // Dynamic grid styling based on number of participants
-  const getGridClass = (count) => {
-    if (count === 1) return "grid-cols-1 md:w-3/4 lg:w-1/2 mx-auto";
-    if (count === 2) return "grid-cols-1 md:grid-cols-2";
-    if (count === 3) return "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3";
-    if (count === 4) return "grid-cols-1 md:grid-cols-2";
-    return "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"; // 5 users
-  };
+    // Add Screen view if active
+    if (remoteScreenStreams[peerId] || status.isScreenSharing) {
+      viewableItems.push({
+        id: `${peerId}-screen`,
+        type: 'screen',
+        stream: remoteScreenStreams[peerId],
+        username: `${peerData.username}'s Screen`,
+        isLocal: false,
+        isVideoEnabled: true,
+        isAudioMuted: true,
+        status: { video: true, audio: false }
+      });
+    }
+  });
+
+  // Calculate the currently displayed large stream
+  const activeItem = viewableItems.find(item => item.id === activeParticipantId) || viewableItems[0];
+
+  // Pagination for side panel (5 at a time)
+  const paginatedParticipants = viewableItems.slice(panelStartIndex, panelStartIndex + 5);
+  const canGoPrev = panelStartIndex > 0;
+  const canGoNext = panelStartIndex + 5 < viewableItems.length;
 
   return (
     <div className={`h-screen w-full flex flex-col relative overflow-hidden transition-colors duration-500 ${
       theme === 'dark' ? 'bg-[#0a0a0a] text-white' : 'bg-gray-50 text-gray-900'
     }`}>
-
       
       {/* Header */}
-      <div className="absolute top-0 w-full z-40 p-6 flex justify-between items-center pointer-events-none">
-        
-        {/* Top Left: Logo */}
+      <div className="absolute top-0 w-full z-40 p-4 sm:p-6 flex justify-between items-center pointer-events-none">
         <div className={`flex items-center gap-3 backdrop-blur-md px-4 py-2 rounded-2xl border transition shadow-lg pointer-events-auto ${
           theme === 'dark' ? 'bg-gray-900/50 border-gray-800' : 'bg-white/80 border-gray-200'
         }`}>
@@ -156,89 +172,155 @@ export const Room = () => {
           <span className="font-semibold hidden sm:inline-block">MeetSpace</span>
         </div>
 
-        {/* Top Right: Meeting Code */}
         <div 
           onClick={handleCopyCode}
-          className={`flex items-center gap-3 backdrop-blur-md px-5 py-2.5 rounded-2xl border pointer-events-auto cursor-pointer transition shadow-lg group ${
+          className={`flex items-center gap-3 backdrop-blur-md px-4 py-2 rounded-2xl border pointer-events-auto cursor-pointer transition shadow-lg group ${
             theme === 'dark' ? 'bg-gray-900/80 hover:bg-gray-800 border-gray-700' : 'bg-white/90 hover:bg-white border-gray-200'
           }`}
-          title="Copy Meeting Code"
         >
           <div className="flex flex-col text-right">
-            <span className="text-[10px] uppercase text-gray-400 font-bold tracking-wider mb-0.5">Meeting Code</span>
-            <span className={`font-mono font-bold tracking-widest ${theme === 'dark' ? 'text-indigo-300' : 'text-indigo-600'}`}>{roomId}</span>
+            <span className="text-[10px] uppercase text-gray-400 font-bold tracking-wider">Room Code</span>
+            <span className={`font-mono font-bold ${theme === 'dark' ? 'text-indigo-300' : 'text-indigo-600'}`}>{roomId}</span>
           </div>
-          <div className="bg-indigo-500/20 p-2 rounded-lg text-indigo-500 group-hover:scale-110 transition">
-            {copied ? <CheckCircle2 size={18} /> : <Copy size={18} />}
+          <div className="bg-indigo-500/10 p-2 rounded-lg text-indigo-500 group-hover:scale-110 transition">
+            {copied ? <CheckCircle2 size={16} /> : <Copy size={16} />}
           </div>
         </div>
       </div>
 
-
-      {/* Main Grid Area */}
-      <div className="flex-grow w-full h-full flex overflow-hidden">
+      {/* Main Content: Flex Row with Main View and Side Panel */}
+      <div className={`flex-grow w-full h-full flex flex-col md:flex-row overflow-hidden relative ${panelSide === 'left' ? 'md:flex-row-reverse' : ''}`}>
         
-        <div className={`flex-grow h-full p-4 sm:p-8 flex items-center justify-center relative transition-all duration-300 ${(isChatOpen || isParticipantsOpen) ? 'pr-4 md:pr-0' : ''}`}>
-
+        {/* Main Video View Area */}
+        <div className="flex-grow h-full p-4 sm:p-8 flex items-center justify-center relative">
           {mediaError && (
             <div className="absolute top-24 left-1/2 -translate-x-1/2 bg-red-500/20 text-red-500 border border-red-500/50 px-6 py-3 rounded-2xl z-50 backdrop-blur-md shadow-lg">
               {mediaError}
             </div>
           )}
 
-          {displayParticipants.length === 1 && (
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 text-center pointer-events-none opacity-50">
-               <div className={`${theme === 'dark' ? 'bg-gray-800/50' : 'bg-gray-200/50'} inline-block p-4 rounded-full mb-4`}>
-                  <Users size={32} />
+          <div className="w-full h-full max-w-6xl max-h-[80vh] flex items-center justify-center bg-black/20 rounded-3xl overflow-hidden shadow-2xl border border-white/5 relative">
+             {activeItem ? (
+               <VideoPlayer 
+                  stream={activeItem.stream} 
+                  isLocal={activeItem.isLocal}
+                  username={activeItem.username}
+                  isAudioMuted={activeItem.isAudioMuted}
+                  isVideoEnabled={activeItem.isVideoEnabled}
+                  isHandRaised={activeItem.isHandRaised}
+                  type={activeItem.type}
+               />
+             ) : (
+               <div className="flex flex-col items-center gap-4 text-gray-500">
+                  <Users size={64} className="opacity-20" />
+                  <p>Initializing meeting view...</p>
                </div>
-               <p className="text-lg font-medium">Waiting for others to join...</p>
-               <p className={`text-sm mt-2 font-mono px-3 py-1 rounded inline-block border ${
-                 theme === 'dark' ? 'bg-black/40 border-gray-700' : 'bg-white/40 border-gray-200'
-               }`}>{roomId}</p>
-            </div>
-          )}
-
-
-          <div className={`grid gap-4 w-full h-full max-h-[85vh] mt-16 sm:mt-10 pb-20 ${getGridClass(displayParticipants.length)} transition-all auto-rows-fr`}>
-            {displayParticipants.map((participant) => (
-              <div key={participant.id} className="w-full h-full relative">
-                <VideoPlayer 
-                  stream={participant.stream} 
-                  isLocal={participant.isLocal}
-                  username={participant.username}
-                  isAudioMuted={participant.isAudioMuted}
-                  isVideoEnabled={participant.isVideoEnabled}
-                  lastReaction={participant.lastReaction}
-                  reactionId={participant.reactionId}
-                  isHandRaised={participant.isHandRaised}
-                />
-
-              </div>
-            ))}
+             )}
           </div>
         </div>
 
-        {/* Right Side Panel */}
-        {(isChatOpen || isParticipantsOpen) && (
-          <div className="fixed inset-y-0 right-0 w-full md:relative md:w-80 h-full z-50 md:z-30">
-            <SidePanel 
-              messages={messages} 
-              onSendMessage={sendChatMessage} 
-              onClose={() => { setIsChatOpen(false); setIsParticipantsOpen(false); }}
-              peers={peers}
-              username={username}
-              remoteStatuses={remoteStatuses}
-              isAudioEnabled={isAudioEnabled}
-              isVideoEnabled={isVideoEnabled}
-              isHandRaised={isHandRaised}
-            />
+        {/* Side Panel Area (Participants or Chat) */}
+        {(isParticipantsOpen || isChatOpen) && (
+          <div className={`w-full md:w-80 h-auto md:h-full bg-gray-900/40 backdrop-blur-2xl border-t md:border-t-0 ${panelSide === 'right' ? 'md:border-l' : 'md:border-r'} border-white/10 flex flex-col z-30 transition-all duration-300`}>
+            
+            {isParticipantsOpen ? (
+              <div className="flex flex-col h-full">
+                <div className="p-4 border-b border-white/10 flex justify-between items-center bg-white/5">
+                  <div className="flex items-center gap-2">
+                    <Users size={18} className="text-indigo-400" />
+                    <span className="font-bold text-sm tracking-tight text-white">In Call ({viewableItems.length})</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button 
+                      onClick={() => setPanelSide(panelSide === 'right' ? 'left' : 'right')}
+                      className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400 hover:text-white"
+                      title={`Move to ${panelSide === 'right' ? 'left' : 'right'}`}
+                    >
+                      {panelSide === 'right' ? <Copy className="-scale-x-100" size={16} /> : <Copy size={16} />}
+                    </button>
+                    <button 
+                      onClick={() => setIsParticipantsOpen(false)}
+                      className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400 hover:text-white md:hidden"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+                  {paginatedParticipants.map((item) => (
+                    <div 
+                      key={item.id} 
+                      onClick={() => setActiveParticipantId(item.id)}
+                      className={`group relative aspect-video w-full rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 border-2 ${
+                        activeParticipantId === item.id 
+                          ? 'border-indigo-500 ring-4 ring-indigo-500/20 scale-[1.02] shadow-xl' 
+                          : 'border-transparent hover:border-white/20 hover:scale-[1.01]'
+                      }`}
+                    >
+                      <div className="absolute inset-0 z-0 opacity-60">
+                         <VideoPlayer 
+                            stream={item.stream} 
+                            isLocal={item.isLocal} 
+                            username={item.username} 
+                            isVideoEnabled={item.isVideoEnabled}
+                            isAudioMuted={item.isAudioMuted}
+                            isSmall={true}
+                            type={item.type}
+                         />
+                      </div>
+                      <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/80 via-black/40 to-transparent z-10 transition-opacity">
+                         <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold text-white truncate max-w-[140px]">
+                              {item.username} {item.isLocal && "(You)"}
+                            </span>
+                            {item.type === 'screen' && <Monitor size={12} className="text-indigo-400" />}
+                         </div>
+                      </div>
+                      {item.isHandRaised && (
+                        <div className="absolute top-2 right-2 bg-yellow-500 p-1.5 rounded-full animate-bounce shadow-lg">
+                          <Hand size={10} className="text-white fill-white" />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="p-4 border-t border-white/5 flex gap-2 bg-black/20">
+                  <button 
+                    disabled={!canGoPrev}
+                    onClick={() => setPanelStartIndex(Math.max(0, panelStartIndex - 5))}
+                    className="flex-1 py-2 px-4 rounded-xl bg-gray-800 hover:bg-gray-700 disabled:opacity-20 disabled:hover:bg-gray-800 transition-all text-[10px] font-bold uppercase tracking-widest text-gray-300"
+                  >
+                    Prev
+                  </button>
+                  <button 
+                    disabled={!canGoNext}
+                    onClick={() => setPanelStartIndex(Math.min(viewableItems.length - 1, panelStartIndex + 5))}
+                    className="flex-1 py-2 px-4 rounded-xl bg-gray-800 hover:bg-gray-700 disabled:opacity-20 disabled:hover:bg-gray-800 transition-all text-[10px] font-bold uppercase tracking-widest text-gray-300"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <SidePanel 
+                messages={messages} 
+                onSendMessage={sendChatMessage} 
+                onClose={() => setIsChatOpen(false)}
+                peers={peers}
+                username={username}
+                remoteStatuses={remoteStatuses}
+                isAudioEnabled={isAudioEnabled}
+                isVideoEnabled={isVideoEnabled}
+                isHandRaised={isHandRaised}
+              />
+            )}
           </div>
         )}
       </div>
 
-
-
-      {/* Controls */}
+      {/* Controls Overlay */}
       <Controls 
         isAudioEnabled={isAudioEnabled}
         isVideoEnabled={isVideoEnabled}
@@ -250,7 +332,6 @@ export const Room = () => {
         toggleChat={toggleChat}
         toggleScreenShare={toggleScreenShare} 
         raiseHand={handleRaiseHand}
-
         sendReaction={sendReaction}
         isParticipantsOpen={isParticipantsOpen}
         toggleParticipants={toggleParticipants}
@@ -259,7 +340,12 @@ export const Room = () => {
         stopMedia={stopMedia}
       />
 
-
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+      `}</style>
     </div>
   );
 };

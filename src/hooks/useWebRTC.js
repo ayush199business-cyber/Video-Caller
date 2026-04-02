@@ -3,10 +3,11 @@ import { useState, useEffect, useRef } from 'react';
 // You will update this URL after `npx wrangler deploy` in the signaling-server folder
 const WS_SIGNALS_URL = import.meta.env.VITE_WS_URL || "wss://meetspace-signaling.ayush199business.workers.dev"; 
 
-export const useWebRTC = (roomId, localStream, username, isVideoEnabled, isAudioEnabled) => {
+export const useWebRTC = (roomId, localStream, screenStream, username, isVideoEnabled, isAudioEnabled) => {
   const [peers, setPeers] = useState({}); // { [peerId]: { username } }
   const [remoteStreams, setRemoteStreams] = useState({}); // { [peerId]: MediaStream }
-  const [remoteStatuses, setRemoteStatuses] = useState({}); // { [peerId]: { video, audio } }
+  const [remoteScreenStreams, setRemoteScreenStreams] = useState({}); // { [peerId]: MediaStream }
+  const [remoteStatuses, setRemoteStatuses] = useState({}); // { [peerId]: { video, audio, isScreenSharing } }
   const [messages, setMessages] = useState([]); // Array of { sender, text, timestamp, isLocal }
 
 
@@ -14,8 +15,9 @@ export const useWebRTC = (roomId, localStream, username, isVideoEnabled, isAudio
   const rtcConnections = useRef({}); // RTCPeerConnection objects
   
   const localStreamRef = useRef(null);
+  const screenStreamRef = useRef(null);
   const usernameRef = useRef('');
-  const statusRef = useRef({ video: true, audio: true });
+  const statusRef = useRef({ video: true, audio: true, isScreenSharing: false });
   
   // Public Google STUN servers to bypass carrier NATs completely
   const rtcConfig = {
@@ -26,8 +28,15 @@ export const useWebRTC = (roomId, localStream, username, isVideoEnabled, isAudio
   };
 
   useEffect(() => { localStreamRef.current = localStream; }, [localStream]);
+  useEffect(() => { screenStreamRef.current = screenStream; }, [screenStream]);
   useEffect(() => { usernameRef.current = username; }, [username]);
-  useEffect(() => { statusRef.current = { video: isVideoEnabled, audio: isAudioEnabled }; }, [isVideoEnabled, isAudioEnabled]);
+  useEffect(() => { 
+    statusRef.current = { 
+      video: isVideoEnabled, 
+      audio: isAudioEnabled, 
+      isScreenSharing: !!screenStream 
+    }; 
+  }, [isVideoEnabled, isAudioEnabled, screenStream]);
 
   useEffect(() => {
     if (!roomId) return;
@@ -50,6 +59,13 @@ export const useWebRTC = (roomId, localStream, username, isVideoEnabled, isAudio
           pc.addTrack(track, localStreamRef.current);
         });
       }
+      
+      // Add screen share tracks if active
+      if (screenStreamRef.current) {
+        screenStreamRef.current.getTracks().forEach(track => {
+          pc.addTrack(track, screenStreamRef.current);
+        });
+      }
 
       // Handle ICE Candidate generations
       pc.onicecandidate = (event) => {
@@ -62,9 +78,20 @@ export const useWebRTC = (roomId, localStream, username, isVideoEnabled, isAudio
       pc.ontrack = (event) => {
          const remoteStream = event.streams[0];
          if (remoteStream) {
-            setRemoteStreams(prev => ({ ...prev, [targetPeerId]: remoteStream }));
-            // Set default explicit unmuted states
-            setRemoteStatuses(prev => ({ ...prev, [targetPeerId]: { video: true, audio: true } }));
+            // Distinguish between camera and screen share
+            const isScreen = remoteStream.getTracks().some(t => 
+              t.label.toLowerCase().includes('screen') || 
+              t.label.toLowerCase().includes('window') ||
+              remoteStream.id.includes('screen')
+            );
+            
+            if (isScreen) {
+              setRemoteScreenStreams(prev => ({ ...prev, [targetPeerId]: remoteStream }));
+            } else {
+              setRemoteStreams(prev => ({ ...prev, [targetPeerId]: remoteStream }));
+            }
+            
+            setRemoteStatuses(prev => ({ ...prev, [targetPeerId]: { ...(prev[targetPeerId] || {}), video: true, audio: true } }));
          }
       };
 
@@ -150,6 +177,7 @@ export const useWebRTC = (roomId, localStream, username, isVideoEnabled, isAudio
                 }
                 setPeers(prev => { const n={...prev}; delete n[leftPeerId]; return n; });
                 setRemoteStreams(prev => { const n={...prev}; delete n[leftPeerId]; return n; });
+                setRemoteScreenStreams(prev => { const n={...prev}; delete n[leftPeerId]; return n; });
                 setRemoteStatuses(prev => { const n={...prev}; delete n[leftPeerId]; return n; });
              }
              break;
@@ -203,50 +231,64 @@ export const useWebRTC = (roomId, localStream, username, isVideoEnabled, isAudio
       rtcConnections.current = {};
       setPeers({});
       setRemoteStreams({});
+      setRemoteScreenStreams({});
       setRemoteStatuses({});
     };
   }, [roomId]);
 
 
-  // Synchronize media unmounts over Central Auth Channel
+  // Synchronize media over Central Auth Channel
   useEffect(() => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
        socketRef.current.send(JSON.stringify({ 
          type: 'status_update', 
-         status: { video: isVideoEnabled, audio: isAudioEnabled } 
+         status: statusRef.current 
        }));
     }
-  }, [isVideoEnabled, isAudioEnabled]);
+  }, [isVideoEnabled, isAudioEnabled, screenStream]);
 
-   // Aggressively bind live media streams to connections and handle track replacement (Screen Sharing)
+   // Aggressively bind live media streams to connections and handle track replacement
    useEffect(() => {
-     if (localStream) {
-       const newVideoTrack = localStream.getVideoTracks()[0];
-       const newAudioTrack = localStream.getAudioTracks()[0];
-
-       Object.values(rtcConnections.current).forEach(async (pc) => {
-         const senders = pc.getSenders();
-         
-         // 1. Handle Video Track Replacement
-         const videoSender = senders.find(s => s.track?.kind === 'video');
-         if (videoSender && newVideoTrack && videoSender.track !== newVideoTrack) {
-            try {
-               await videoSender.replaceTrack(newVideoTrack);
-            } catch (e) {
-               console.error("Failed to replace video track:", e);
-            }
-         } else if (!videoSender && newVideoTrack) {
-            pc.addTrack(newVideoTrack, localStream);
+     Object.values(rtcConnections.current).forEach(async (pc) => {
+       const senders = pc.getSenders();
+       
+       // Sync Camera Video
+       if (localStream) {
+         const videoTrack = localStream.getVideoTracks()[0];
+         const videoSender = senders.find(s => s.track?.kind === 'video' && !s.track.label.toLowerCase().includes('screen'));
+         if (videoSender && videoTrack && videoSender.track !== videoTrack) {
+           await videoSender.replaceTrack(videoTrack).catch(e => console.error(e));
+         } else if (!videoSender && videoTrack) {
+           pc.addTrack(videoTrack, localStream);
          }
+       }
 
-         // 2. Handle Audio Track (Ensure it's added if missing)
+       // Sync Audio
+       if (localStream) {
+         const audioTrack = localStream.getAudioTracks()[0];
          const audioSender = senders.find(s => s.track?.kind === 'audio');
-         if (!audioSender && newAudioTrack) {
-            pc.addTrack(newAudioTrack, localStream);
+         if (!audioSender && audioTrack) {
+           pc.addTrack(audioTrack, localStream);
          }
-       });
-     }
-   }, [localStream]);
+       }
+
+       // Sync Screen Share
+       if (screenStream) {
+         const screenTrack = screenStream.getVideoTracks()[0];
+         const screenSender = senders.find(s => s.track?.kind === 'video' && s.track.label.toLowerCase().includes('screen'));
+         if (!screenSender && screenTrack) {
+           pc.addTrack(screenTrack, screenStream);
+         }
+       } else {
+         // REMOVE screen tracks if not sharing
+         senders.forEach(sender => {
+           if (sender.track?.kind === 'video' && sender.track.label.toLowerCase().includes('screen')) {
+             pc.removeTrack(sender);
+           }
+         });
+       }
+     });
+   }, [localStream, screenStream]);
 
 
   const sendChatMessage = (text) => {
@@ -276,7 +318,7 @@ export const useWebRTC = (roomId, localStream, username, isVideoEnabled, isAudio
     }
   };
 
-  return { peers, remoteStreams, remoteStatuses, messages, sendChatMessage, sendReaction, raiseHand };
+  return { peers, remoteStreams, remoteScreenStreams, remoteStatuses, messages, sendChatMessage, sendReaction, raiseHand };
 };
 
 
