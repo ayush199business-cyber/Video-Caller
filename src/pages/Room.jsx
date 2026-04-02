@@ -7,6 +7,7 @@ import { VideoPlayer } from '../components/VideoPlayer';
 import { Controls } from '../components/Controls';
 import SidePanel from '../components/SidePanel';
 
+import { Whiteboard } from '../components/Whiteboard';
 import { copyToClipboard } from '../utils/helpers';
 
 export const Room = () => {
@@ -19,6 +20,7 @@ export const Room = () => {
   const [isParticipantsOpen, setIsParticipantsOpen] = useState(false); // Default hidden for mobile
   const [theme, setTheme] = useState('dark');
   const [isHandRaised, setIsHandRaised] = useState(false);
+  const [isWhiteboardOpen, setIsWhiteboardOpen] = useState(false);
 
   // New Interface States
   const [activeParticipantId, setActiveParticipantId] = useState('local');
@@ -209,7 +211,10 @@ export const Room = () => {
 
           <div className="w-full h-full max-w-6xl max-h-[85vh] sm:max-h-[80vh] flex items-center justify-center bg-white/5 rounded-[32px] sm:rounded-[40px] overflow-hidden shadow-[0_20px_80px_-20px_rgba(79,70,229,0.3)] border border-white/10 relative group">
              <div className="absolute -top-32 -left-32 w-64 h-64 bg-indigo-500/10 blur-[100px] pointer-events-none transition-all group-hover:bg-indigo-500/20"></div>
-             {activeItem ? (
+             
+             {isWhiteboardOpen ? (
+               <Whiteboard onClose={() => setIsWhiteboardOpen(false)} theme={theme} />
+             ) : activeItem ? (
                <VideoPlayer 
                   stream={activeItem.stream} 
                   isLocal={activeItem.isLocal}
@@ -350,6 +355,8 @@ export const Room = () => {
         toggleParticipants={toggleParticipants}
         theme={theme}
         toggleTheme={toggleTheme}
+        isWhiteboardOpen={isWhiteboardOpen}
+        toggleWhiteboard={() => setIsWhiteboardOpen(!isWhiteboardOpen)}
         stopMedia={stopMedia}
       />
 

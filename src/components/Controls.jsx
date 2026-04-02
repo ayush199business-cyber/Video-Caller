@@ -10,6 +10,7 @@ export const Controls = ({
   isAudioEnabled, isVideoEnabled, isChatOpen, isScreenSharing, isHandRaised,
   toggleAudio, toggleVideo, toggleChat, toggleScreenShare, raiseHand, 
   sendReaction, isParticipantsOpen, toggleParticipants, theme, toggleTheme,
+  isWhiteboardOpen, toggleWhiteboard,
   stopMedia 
 }) => {
   const navigate = useNavigate();
@@ -99,6 +100,19 @@ export const Controls = ({
           >
             <Hand size={20} />
           </button>
+
+          {/* Desktop-only Whiteboard Toggle */}
+          <div className="hidden md:flex">
+            <button
+              onClick={toggleWhiteboard}
+              className={`p-3 sm:p-4 rounded-full transition-all duration-300 ${
+                isWhiteboardOpen ? 'bg-indigo-600 text-white shadow-[0_0_15px_rgba(139,92,246,0.5)]' : 'bg-gray-800 hover:bg-gray-700 text-white'
+              }`}
+              title={isWhiteboardOpen ? 'Close Whiteboard' : 'Open Whiteboard'}
+            >
+              <Pencil size={20} />
+            </button>
+          </div>
         </div>
 
         {/* Panel Group */}
