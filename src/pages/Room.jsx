@@ -192,14 +192,15 @@ export const Room = () => {
       <div className={`flex-grow w-full h-full flex flex-col md:flex-row overflow-hidden relative ${panelSide === 'left' ? 'md:flex-row-reverse' : ''}`}>
         
         {/* Main Video View Area */}
-        <div className="flex-grow h-full p-4 sm:p-8 flex items-center justify-center relative">
+        <div className="flex-grow h-full p-4 sm:p-8 flex items-center justify-center relative animate-fade-in-up">
           {mediaError && (
-            <div className="absolute top-24 left-1/2 -translate-x-1/2 bg-red-500/20 text-red-500 border border-red-500/50 px-6 py-3 rounded-2xl z-50 backdrop-blur-md shadow-lg">
+            <div className="absolute top-24 left-1/2 -translate-x-1/2 bg-red-500/20 text-red-400 border border-red-500/30 px-6 py-3 rounded-2xl z-50 backdrop-blur-md shadow-lg animate-shake">
               {mediaError}
             </div>
           )}
 
-          <div className="w-full h-full max-w-6xl max-h-[80vh] flex items-center justify-center bg-black/20 rounded-3xl overflow-hidden shadow-2xl border border-white/5 relative">
+          <div className="w-full h-full max-w-6xl max-h-[80vh] flex items-center justify-center bg-white/5 rounded-[40px] overflow-hidden shadow-[0_20px_80px_-20px_rgba(79,70,229,0.3)] border border-white/10 relative group">
+             <div className="absolute -top-32 -left-32 w-64 h-64 bg-indigo-500/10 blur-[100px] pointer-events-none transition-all group-hover:bg-indigo-500/20"></div>
              {activeItem ? (
                <VideoPlayer 
                   stream={activeItem.stream} 
@@ -212,8 +213,10 @@ export const Room = () => {
                />
              ) : (
                <div className="flex flex-col items-center gap-4 text-gray-500">
-                  <Users size={64} className="opacity-20" />
-                  <p>Initializing meeting view...</p>
+                  <div className="p-6 bg-white/5 rounded-3xl border border-white/10 animate-pulse">
+                    <Users size={64} className="opacity-20" />
+                  </div>
+                  <p className="font-bold tracking-widest uppercase text-xs">Connecting to stream...</p>
                </div>
              )}
           </div>
@@ -221,41 +224,43 @@ export const Room = () => {
 
         {/* Side Panel Area (Participants or Chat) */}
         {(isParticipantsOpen || isChatOpen) && (
-          <div className={`w-full md:w-80 h-auto md:h-full bg-gray-900/40 backdrop-blur-2xl border-t md:border-t-0 ${panelSide === 'right' ? 'md:border-l' : 'md:border-r'} border-white/10 flex flex-col z-30 transition-all duration-300`}>
+          <div className={`w-full md:w-80 h-auto md:h-full glass-card border-t md:border-t-0 ${panelSide === 'right' ? 'md:border-l' : 'md:border-r'} border-white/10 flex flex-col z-30 transition-all duration-500 animate-fade-in-up [animation-delay:100ms]`}>
             
             {isParticipantsOpen ? (
               <div className="flex flex-col h-full">
-                <div className="p-4 border-b border-white/10 flex justify-between items-center bg-white/5">
-                  <div className="flex items-center gap-2">
-                    <Users size={18} className="text-indigo-400" />
-                    <span className="font-bold text-sm tracking-tight text-white">In Call ({viewableItems.length})</span>
+                <div className="p-6 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center">
+                      <Users size={16} className="text-indigo-400" />
+                    </div>
+                    <span className="font-bold text-sm tracking-tight text-white uppercase">In Call ({viewableItems.length})</span>
                   </div>
                   <div className="flex items-center gap-1">
                     <button 
                       onClick={() => setPanelSide(panelSide === 'right' ? 'left' : 'right')}
-                      className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400 hover:text-white"
+                      className="p-2 hover:bg-white/5 rounded-xl transition-all text-gray-400 hover:text-white hover:scale-110"
                       title={`Move to ${panelSide === 'right' ? 'left' : 'right'}`}
                     >
                       {panelSide === 'right' ? <Copy className="-scale-x-100" size={16} /> : <Copy size={16} />}
                     </button>
                     <button 
                       onClick={() => setIsParticipantsOpen(false)}
-                      className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400 hover:text-white md:hidden"
+                      className="p-2 hover:bg-white/5 rounded-xl transition-all text-gray-400 hover:text-white md:hidden"
                     >
                       <X size={16} />
                     </button>
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
                   {paginatedParticipants.map((item) => (
                     <div 
                       key={item.id} 
                       onClick={() => setActiveParticipantId(item.id)}
                       className={`group relative aspect-video w-full rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 border-2 ${
                         activeParticipantId === item.id 
-                          ? 'border-indigo-500 ring-4 ring-indigo-500/20 scale-[1.02] shadow-xl' 
-                          : 'border-transparent hover:border-white/20 hover:scale-[1.01]'
+                          ? 'border-indigo-500 ring-8 ring-indigo-500/10 scale-[1.02] shadow-[0_0_30px_rgba(79,70,229,0.3)]' 
+                          : 'border-white/5 hover:border-white/20 hover:scale-[1.01]'
                       }`}
                     >
                       <div className="absolute inset-0 z-0 opacity-60">
@@ -269,12 +274,12 @@ export const Room = () => {
                             type={item.type}
                          />
                       </div>
-                      <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/80 via-black/40 to-transparent z-10 transition-opacity">
+                      <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/80 via-black/20 to-transparent z-10 transition-opacity">
                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold text-white truncate max-w-[140px]">
+                            <span className="text-[10px] font-bold text-white/90 truncate max-w-[140px] uppercase tracking-wider">
                               {item.username} {item.isLocal && "(You)"}
                             </span>
-                            {item.type === 'screen' && <Monitor size={12} className="text-indigo-400" />}
+                            {item.type === 'screen' && <Monitor size={10} className="text-indigo-400" />}
                          </div>
                       </div>
                       {item.isHandRaised && (
@@ -286,18 +291,18 @@ export const Room = () => {
                   ))}
                 </div>
 
-                <div className="p-4 border-t border-white/5 flex gap-2 bg-black/20">
+                <div className="p-4 border-t border-white/5 flex gap-2 bg-white/[0.02]">
                   <button 
                     disabled={!canGoPrev}
                     onClick={() => setPanelStartIndex(Math.max(0, panelStartIndex - 5))}
-                    className="flex-1 py-2 px-4 rounded-xl bg-gray-800 hover:bg-gray-700 disabled:opacity-20 disabled:hover:bg-gray-800 transition-all text-[10px] font-bold uppercase tracking-widest text-gray-300"
+                    className="flex-1 py-3 px-4 rounded-2xl bg-white/5 hover:bg-white/10 disabled:opacity-20 transition-all text-[10px] font-black uppercase tracking-widest text-gray-300 border border-white/5"
                   >
                     Prev
                   </button>
                   <button 
                     disabled={!canGoNext}
                     onClick={() => setPanelStartIndex(Math.min(viewableItems.length - 1, panelStartIndex + 5))}
-                    className="flex-1 py-2 px-4 rounded-xl bg-gray-800 hover:bg-gray-700 disabled:opacity-20 disabled:hover:bg-gray-800 transition-all text-[10px] font-bold uppercase tracking-widest text-gray-300"
+                    className="flex-1 py-3 px-4 rounded-2xl bg-white/5 hover:bg-white/10 disabled:opacity-20 transition-all text-[10px] font-black uppercase tracking-widest text-gray-300 border border-white/5"
                   >
                     Next
                   </button>
