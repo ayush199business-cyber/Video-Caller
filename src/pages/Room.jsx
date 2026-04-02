@@ -16,7 +16,7 @@ export const Room = () => {
   const username = location.state?.username;
   const [copied, setCopied] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [isParticipantsOpen, setIsParticipantsOpen] = useState(true); // Default open for the new UI
+  const [isParticipantsOpen, setIsParticipantsOpen] = useState(false); // Default hidden for mobile
   const [theme, setTheme] = useState('dark');
   const [isHandRaised, setIsHandRaised] = useState(false);
 
@@ -188,18 +188,26 @@ export const Room = () => {
         </div>
       </div>
 
+      {/* Backdrop for Mobile Drawer */}
+      {(isParticipantsOpen || isChatOpen) && (
+        <div 
+          className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[45] animate-fade-in"
+          onClick={() => { setIsParticipantsOpen(false); setIsChatOpen(false); }}
+        />
+      )}
+
       {/* Main Content: Flex Row with Main View and Side Panel */}
-      <div className={`flex-grow w-full h-full flex flex-col md:flex-row overflow-hidden relative ${panelSide === 'left' ? 'md:flex-row-reverse' : ''}`}>
+      <div className={`flex-grow w-full h-full flex flex-row overflow-hidden relative ${panelSide === 'left' ? 'md:flex-row-reverse' : ''}`}>
         
         {/* Main Video View Area */}
-        <div className="flex-grow h-full p-4 sm:p-8 flex items-center justify-center relative animate-fade-in-up">
+        <div className="flex-grow h-full p-2 sm:p-8 flex items-center justify-center relative animate-fade-in-up">
           {mediaError && (
             <div className="absolute top-24 left-1/2 -translate-x-1/2 bg-red-500/20 text-red-400 border border-red-500/30 px-6 py-3 rounded-2xl z-50 backdrop-blur-md shadow-lg animate-shake">
               {mediaError}
             </div>
           )}
 
-          <div className="w-full h-full max-w-6xl max-h-[80vh] flex items-center justify-center bg-white/5 rounded-[40px] overflow-hidden shadow-[0_20px_80px_-20px_rgba(79,70,229,0.3)] border border-white/10 relative group">
+          <div className="w-full h-full max-w-6xl max-h-[85vh] sm:max-h-[80vh] flex items-center justify-center bg-white/5 rounded-[32px] sm:rounded-[40px] overflow-hidden shadow-[0_20px_80px_-20px_rgba(79,70,229,0.3)] border border-white/10 relative group">
              <div className="absolute -top-32 -left-32 w-64 h-64 bg-indigo-500/10 blur-[100px] pointer-events-none transition-all group-hover:bg-indigo-500/20"></div>
              {activeItem ? (
                <VideoPlayer 
@@ -216,113 +224,113 @@ export const Room = () => {
                   <div className="p-6 bg-white/5 rounded-3xl border border-white/10 animate-pulse">
                     <Users size={64} className="opacity-20" />
                   </div>
-                  <p className="font-bold tracking-widest uppercase text-xs">Connecting to stream...</p>
+                  <p className="font-bold tracking-widest uppercase text-xs">Connecting...</p>
                </div>
              )}
           </div>
         </div>
 
-        {/* Side Panel Area (Participants or Chat) */}
-        {(isParticipantsOpen || isChatOpen) && (
-          <div className={`w-full md:w-80 h-auto md:h-full glass-card border-t md:border-t-0 ${panelSide === 'right' ? 'md:border-l' : 'md:border-r'} border-white/10 flex flex-col z-30 transition-all duration-500 animate-fade-in-up [animation-delay:100ms]`}>
-            
-            {isParticipantsOpen ? (
-              <div className="flex flex-col h-full">
-                <div className="p-6 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center">
-                      <Users size={16} className="text-indigo-400" />
-                    </div>
-                    <span className="font-bold text-sm tracking-tight text-white uppercase">In Call ({viewableItems.length})</span>
+        {/* Side Panel Area: Fixed Drawer on Mobile, Relative on Desktop */}
+        <div 
+          className={`
+            fixed md:relative top-0 right-0 h-full w-[85%] md:w-80 max-w-sm md:max-w-none z-[50] md:z-30
+            glass-card border-l md:border-t-0 border-white/10 flex flex-col 
+            transition-transform duration-300 ease-in-out
+            ${(isParticipantsOpen || isChatOpen) ? 'translate-x-0' : 'translate-x-full md:hidden'}
+            ${panelSide === 'left' ? 'left-0 border-r border-l-0' : 'right-0 border-l'}
+          `}
+        >
+          {isParticipantsOpen ? (
+            <div className="flex flex-col h-full">
+              <div className="p-6 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center">
+                    <Users size={16} className="text-indigo-400" />
                   </div>
-                  <div className="flex items-center gap-1">
-                    <button 
-                      onClick={() => setPanelSide(panelSide === 'right' ? 'left' : 'right')}
-                      className="p-2 hover:bg-white/5 rounded-xl transition-all text-gray-400 hover:text-white hover:scale-110"
-                      title={`Move to ${panelSide === 'right' ? 'left' : 'right'}`}
-                    >
-                      {panelSide === 'right' ? <Copy className="-scale-x-100" size={16} /> : <Copy size={16} />}
-                    </button>
-                    <button 
-                      onClick={() => setIsParticipantsOpen(false)}
-                      className="p-2 hover:bg-white/5 rounded-xl transition-all text-gray-400 hover:text-white md:hidden"
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
+                  <span className="font-bold text-sm tracking-tight text-white uppercase">In Call ({viewableItems.length})</span>
                 </div>
-
-                <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
-                  {paginatedParticipants.map((item) => (
-                    <div 
-                      key={item.id} 
-                      onClick={() => setActiveParticipantId(item.id)}
-                      className={`group relative aspect-video w-full rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 border-2 ${
-                        activeParticipantId === item.id 
-                          ? 'border-indigo-500 ring-8 ring-indigo-500/10 scale-[1.02] shadow-[0_0_30px_rgba(79,70,229,0.3)]' 
-                          : 'border-white/5 hover:border-white/20 hover:scale-[1.01]'
-                      }`}
-                    >
-                      <div className="absolute inset-0 z-0 opacity-60">
-                         <VideoPlayer 
-                            stream={item.stream} 
-                            isLocal={item.isLocal} 
-                            username={item.username} 
-                            isVideoEnabled={item.isVideoEnabled}
-                            isAudioMuted={item.isAudioMuted}
-                            isSmall={true}
-                            type={item.type}
-                         />
-                      </div>
-                      <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/80 via-black/20 to-transparent z-10 transition-opacity">
-                         <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold text-white/90 truncate max-w-[140px] uppercase tracking-wider">
-                              {item.username} {item.isLocal && "(You)"}
-                            </span>
-                            {item.type === 'screen' && <Monitor size={10} className="text-indigo-400" />}
-                         </div>
-                      </div>
-                      {item.isHandRaised && (
-                        <div className="absolute top-2 right-2 bg-yellow-500 p-1.5 rounded-full animate-bounce shadow-lg">
-                          <Hand size={10} className="text-white fill-white" />
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                <div className="p-4 border-t border-white/5 flex gap-2 bg-white/[0.02]">
+                <div className="flex items-center gap-1">
                   <button 
-                    disabled={!canGoPrev}
-                    onClick={() => setPanelStartIndex(Math.max(0, panelStartIndex - 5))}
-                    className="flex-1 py-3 px-4 rounded-2xl bg-white/5 hover:bg-white/10 disabled:opacity-20 transition-all text-[10px] font-black uppercase tracking-widest text-gray-300 border border-white/5"
+                    onClick={() => setPanelSide(panelSide === 'right' ? 'left' : 'right')}
+                    className="p-2 hover:bg-white/5 rounded-xl transition-all text-gray-400 hover:text-white hidden md:block"
+                    title={`Move to ${panelSide === 'right' ? 'left' : 'right'}`}
                   >
-                    Prev
+                    {panelSide === 'right' ? <Copy className="-scale-x-100" size={16} /> : <Copy size={16} />}
                   </button>
                   <button 
-                    disabled={!canGoNext}
-                    onClick={() => setPanelStartIndex(Math.min(viewableItems.length - 1, panelStartIndex + 5))}
-                    className="flex-1 py-3 px-4 rounded-2xl bg-white/5 hover:bg-white/10 disabled:opacity-20 transition-all text-[10px] font-black uppercase tracking-widest text-gray-300 border border-white/5"
+                    onClick={() => { setIsParticipantsOpen(false); setIsChatOpen(false); }}
+                    className="p-2 hover:bg-white/5 rounded-xl transition-all text-gray-400 hover:text-white"
                   >
-                    Next
+                    <X size={20} />
                   </button>
                 </div>
               </div>
-            ) : (
-              <SidePanel 
-                messages={messages} 
-                onSendMessage={sendChatMessage} 
-                onClose={() => setIsChatOpen(false)}
-                peers={peers}
-                username={username}
-                remoteStatuses={remoteStatuses}
-                isAudioEnabled={isAudioEnabled}
-                isVideoEnabled={isVideoEnabled}
-                isHandRaised={isHandRaised}
-              />
-            )}
-          </div>
-        )}
+
+              <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+                {paginatedParticipants.map((item) => (
+                  <div 
+                    key={item.id} 
+                    onClick={() => setActiveParticipantId(item.id)}
+                    className={`group relative aspect-video w-full rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 border-2 ${
+                      activeParticipantId === item.id 
+                        ? 'border-indigo-500 ring-4 ring-indigo-500/10 scale-[1.02] shadow-[0_0_20px_rgba(79,70,229,0.3)]' 
+                        : 'border-white/5 hover:border-white/20'
+                    }`}
+                  >
+                    <div className="absolute inset-0 z-0 opacity-60">
+                       <VideoPlayer 
+                          stream={item.stream} 
+                          isLocal={item.isLocal} 
+                          username={item.username} 
+                          isVideoEnabled={item.isVideoEnabled}
+                          isAudioMuted={item.isAudioMuted}
+                          isSmall={true}
+                          type={item.type}
+                       />
+                    </div>
+                    <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/80 to-transparent z-10">
+                       <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-white/90 truncate max-w-[120px] uppercase tracking-wider">
+                            {item.username} {item.isLocal && "(You)"}
+                          </span>
+                          {item.type === 'screen' && <Monitor size={10} className="text-indigo-400" />}
+                       </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="p-4 border-t border-white/5 flex gap-2 bg-white/[0.02]">
+                <button 
+                  disabled={!canGoPrev}
+                  onClick={() => setPanelStartIndex(Math.max(0, panelStartIndex - 5))}
+                  className="flex-1 py-3 px-4 rounded-xl bg-white/5 hover:bg-white/10 disabled:opacity-20 transition-all text-[10px] font-black uppercase tracking-widest text-gray-300 border border-white/5"
+                >
+                  Prev
+                </button>
+                <button 
+                  disabled={!canGoNext}
+                  onClick={() => setPanelStartIndex(Math.min(viewableItems.length - 1, panelStartIndex + 5))}
+                  className="flex-1 py-3 px-4 rounded-xl bg-white/5 hover:bg-white/10 disabled:opacity-20 transition-all text-[10px] font-black uppercase tracking-widest text-gray-300 border border-white/5"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          ) : isChatOpen ? (
+            <SidePanel 
+              messages={messages} 
+              onSendMessage={sendChatMessage} 
+              onClose={() => setIsChatOpen(false)}
+              peers={peers}
+              username={username}
+              remoteStatuses={remoteStatuses}
+              isAudioEnabled={isAudioEnabled}
+              isVideoEnabled={isVideoEnabled}
+              isHandRaised={isHandRaised}
+            />
+          ) : null}
+        </div>
       </div>
 
       {/* Controls Overlay */}
