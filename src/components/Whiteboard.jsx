@@ -1,36 +1,47 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { 
+  MousePointer2, 
   Pencil, 
+  PenLine, 
+  Highlighter, 
   Square, 
-  ArrowUpRight, 
-  Hexagon, 
-  Trash2, 
+  RectangleHorizontal, 
   Circle, 
+  Hexagon, 
+  Minus, 
+  ArrowUpRight, 
+  Eraser, 
   Type,
-  MousePointer2,
-  Undo2
+  Undo2,
+  Redo2,
+  Trash2,
+  MoreHorizontal,
+  Grid,
+  Plus,
+  ChevronDown
 } from 'lucide-react';
 
 export const Whiteboard = ({ onClose, theme = 'dark' }) => {
   const canvasRef = useRef(null);
   const contextRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [tool, setTool] = useState('pen'); // 'pen', 'rectangle', 'square', 'octagon', 'arrow'
-  const [color, setColor] = useState('#8b5cf6'); // MeetSpace Indigo
-  const [inkStyle, setInkStyle] = useState('solid'); // 'solid', 'dashed', 'neon', 'thick'
+  const [tool, setTool] = useState('pen');
+  const [color, setColor] = useState('#8b5cf6'); // Default Indigo
+  const [inkStyle, setInkStyle] = useState('solid'); 
+  const [strokeWidth, setStrokeWidth] = useState(3);
+  const [background, setBackground] = useState('white'); // 'white', 'grid', 'dot'
   
   const [startPos, setStartPos] = useState({ x: 0, y: 0 });
   const [history, setHistory] = useState([]);
+  const [redoStack, setRedoStack] = useState([]);
   
   useEffect(() => {
     const canvas = canvasRef.current;
-    // Set display size (css)
     const { width, height } = canvas.parentElement.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    
     canvas.style.width = `${width}px`;
     canvas.style.height = `${height}px`;
-    
-    // Set actual resolution (taking device pixel ratio into account)
-    const dpr = window.devicePixelRatio || 1;
     canvas.width = width * dpr;
     canvas.height = height * dpr;
     
@@ -40,19 +51,9 @@ export const Whiteboard = ({ onClose, theme = 'dark' }) => {
     ctx.lineJoin = 'round';
     contextRef.current = ctx;
     
-    // Initial board state
-    if (theme === 'dark') {
-      ctx.fillStyle = '#111827';
-      ctx.fillRect(0, 0, width, height);
-    } else {
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, width, height);
-    }
-    
-    // Save initial state for history
+    drawBackground();
     saveToHistory();
-    
-    // Resize handler
+
     const handleResize = () => {
       const currentImage = canvas.toDataURL();
       const { width: newW, height: newH } = canvas.parentElement.getBoundingClientRect();
@@ -66,49 +67,83 @@ export const Whiteboard = ({ onClose, theme = 'dark' }) => {
       
       const img = new Image();
       img.src = currentImage;
-      img.onload = () => ctx.drawImage(img, 0, 0, newW, newH);
+      img.onload = () => {
+        drawBackground(); // redraw background first
+        ctx.drawImage(img, 0, 0, newW, newH);
+      };
     };
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [background]);
+
+  const drawBackground = () => {
+    const ctx = contextRef.current;
+    const canvas = canvasRef.current;
+    const { width, height } = canvas.getBoundingClientRect();
+    
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+    
+    if (background === 'grid') {
+      ctx.strokeStyle = '#f0f0f0';
+      ctx.lineWidth = 1;
+      const step = 30;
+      for (let x = 0; x < width; x += step) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke();
+      }
+      for (let y = 0; y < height; y += step) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke();
+      }
+    } else if (background === 'dot') {
+      ctx.fillStyle = '#e0e0e0';
+      const step = 20;
+      for (let x = 0; x < width; x += step) {
+        for (let y = 0; y < height; y += step) {
+          ctx.beginPath(); ctx.arc(x, y, 1, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+    }
+  };
 
   const saveToHistory = () => {
     const canvas = canvasRef.current;
     setHistory(prev => [...prev.slice(-19), canvas.toDataURL()]);
+    setRedoStack([]);
   };
 
   const applyStyle = (ctx) => {
     ctx.strokeStyle = color;
-    ctx.shadowBlur = 0;
-    ctx.shadowColor = 'transparent';
+    ctx.globalAlpha = 1;
     ctx.setLineDash([]);
-    ctx.lineWidth = 2;
+    ctx.lineWidth = strokeWidth;
+    ctx.shadowBlur = 0;
 
-    if (inkStyle === 'thick') ctx.lineWidth = 6;
+    if (tool === 'marker') ctx.globalAlpha = 0.5;
+    if (tool === 'highlighter') {
+      ctx.globalAlpha = 0.3;
+      ctx.lineWidth = strokeWidth * 3;
+    }
+    
     if (inkStyle === 'dashed') ctx.setLineDash([10, 10]);
     if (inkStyle === 'neon') {
-      ctx.shadowBlur = 15;
+      ctx.shadowBlur = 10;
       ctx.shadowColor = color;
-      ctx.lineWidth = 3;
     }
   };
 
   const startDrawing = ({ nativeEvent }) => {
     const { offsetX, offsetY } = nativeEvent;
     
-    if (tool === 'pen') {
+    if (['pen', 'marker', 'highlighter'].includes(tool)) {
       contextRef.current.beginPath();
       contextRef.current.moveTo(offsetX, offsetY);
       applyStyle(contextRef.current);
     } else {
       setStartPos({ x: offsetX, y: offsetY });
-      // Store current state for preview
       const canvas = canvasRef.current;
-      const previewSnapshot = canvas.toDataURL();
-      canvas.dataset.snapshot = previewSnapshot;
+      canvas.dataset.snapshot = canvas.toDataURL();
     }
-    
     setIsDrawing(true);
   };
 
@@ -118,15 +153,12 @@ export const Whiteboard = ({ onClose, theme = 'dark' }) => {
     const ctx = contextRef.current;
     const canvas = canvasRef.current;
 
-    if (tool === 'pen') {
+    if (['pen', 'marker', 'highlighter'].includes(tool)) {
       ctx.lineTo(offsetX, offsetY);
       ctx.stroke();
     } else {
-      // CLEAR TO PREVIEW SNAPSHOT
       const img = new Image();
       img.src = canvas.dataset.snapshot;
-      // We can't wait for onload here for 60fps drawing, so we use a buffer or accept small flicker
-      // In a real app, I'd use two canvases (top/bottom), but for 1 file precision I'll use the clearRect+redraw strategy
       const { width, height } = canvas.getBoundingClientRect();
       ctx.clearRect(0, 0, width, height);
       ctx.drawImage(img, 0, 0, width, height);
@@ -144,157 +176,241 @@ export const Whiteboard = ({ onClose, theme = 'dark' }) => {
   };
 
   const drawShape = (ctx, x1, y1, x2, y2, toolType) => {
-    ctx.beginPath();
     const w = x2 - x1;
     const h = y2 - y1;
-
+    ctx.beginPath();
     switch (toolType) {
-      case 'rectangle':
-        ctx.strokeRect(x1, y1, w, h);
-        break;
-      case 'square':
+      case 'rectangle': ctx.strokeRect(x1, y1, w, h); break;
+      case 'square': 
         const side = Math.max(Math.abs(w), Math.abs(h));
         ctx.strokeRect(x1, y1, w > 0 ? side : -side, h > 0 ? side : -side);
         break;
-      case 'octagon':
-        drawOctagon(ctx, x1, y1, x2, y2);
+      case 'circle':
+        const r = Math.sqrt(w*w + h*h);
+        ctx.arc(x1, y1, r, 0, Math.PI * 2);
+        ctx.stroke();
         break;
-      case 'arrow':
-        drawArrow(ctx, x1, y1, x2, y2);
-        break;
-      default:
-        break;
+      case 'octagon': drawOctagon(ctx, x1, y1, x2, y2); break;
+      case 'line': ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); break;
+      case 'arrow': drawArrow(ctx, x1, y1, x2, y2); break;
+      case 'eraser': eraser(ctx, x2, y2); break;
     }
-    ctx.closePath();
   };
 
   const drawOctagon = (ctx, x1, y1, x2, y2) => {
-    const centerX = (x1 + x2) / 2;
-    const centerY = (y1 + y2) / 2;
-    const radiusX = Math.abs(x2 - x1) / 2;
-    const radiusY = Math.abs(y2 - y1) / 2;
-    
-    ctx.beginPath();
-    for (let i = 0; i < 8; i++) {
-      const angle = (i * Math.PI) / 4;
-      const x = centerX + radiusX * Math.cos(angle);
-      const y = centerY + radiusY * Math.sin(angle);
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
+    const cx = (x1+x2)/2; const cy = (y1+y2)/2;
+    const rx = Math.abs(x2-x1)/2; const ry = Math.abs(y2-y1)/2;
+    for(let i=0; i<8; i++) {
+      const a = (i * Math.PI)/4;
+      const x = cx + rx * Math.cos(a);
+      const y = cy + ry * Math.sin(a);
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
     }
-    ctx.closePath();
-    ctx.stroke();
+    ctx.closePath(); ctx.stroke();
   };
 
   const drawArrow = (ctx, x1, y1, x2, y2) => {
-    const headlen = 15;
-    const angle = Math.atan2(y2 - y1, x2 - x1);
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.lineTo(x2 - headlen * Math.cos(angle - Math.PI / 6), y2 - headlen * Math.sin(angle - Math.PI / 6));
-    ctx.moveTo(x2, y2);
-    ctx.lineTo(x2 - headlen * Math.cos(angle + Math.PI / 6), y2 - headlen * Math.sin(angle + Math.PI / 6));
+    const headlen = 15; const a = Math.atan2(y2-y1, x2-x1);
+    ctx.moveTo(x1,y1); ctx.lineTo(x2,y2);
+    ctx.lineTo(x2 - headlen * Math.cos(a - Math.PI/6), y2 - headlen * Math.sin(a - Math.PI/6));
+    ctx.moveTo(x2,y2); 
+    ctx.lineTo(x2 - headlen * Math.cos(a + Math.PI/6), y2 - headlen * Math.sin(a + Math.PI/6));
     ctx.stroke();
   };
 
-  const clearCanvas = () => {
-    const canvas = canvasRef.current;
-    const ctx = contextRef.current;
-    const { width, height } = canvas.getBoundingClientRect();
-    ctx.fillStyle = theme === 'dark' ? '#111827' : '#ffffff';
-    ctx.fillRect(0, 0, width, height);
-    saveToHistory();
+  const eraser = (ctx, x, y) => {
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.beginPath();
+    ctx.arc(x, y, 20, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
   };
 
   const undo = () => {
     if (history.length <= 1) return;
-    const prevStates = [...history];
-    prevStates.pop(); // remove current
-    const lastState = prevStates[prevStates.length - 1];
-    
-    const img = new Image();
-    img.src = lastState;
+    const current = history.pop();
+    setRedoStack(prev => [current, ...prev]);
+    const prev = history[history.length - 1];
+    restoreState(prev);
+  };
+
+  const redo = () => {
+    if (redoStack.length === 0) return;
+    const next = redoStack.shift();
+    setHistory(prev => [...prev, next]);
+    restoreState(next);
+  };
+
+  const restoreState = (dataUrl) => {
+    const img = new Image(); img.src = dataUrl;
     img.onload = () => {
-      const canvas = canvasRef.current;
-      const ctx = contextRef.current;
-      const { width, height } = canvas.getBoundingClientRect();
-      ctx.clearRect(0, 0, width, height);
-      ctx.drawImage(img, 0, 0, width, height);
-      setHistory(prevStates);
+      const { width, height } = canvasRef.current.getBoundingClientRect();
+      contextRef.current.clearRect(0,0,width,height);
+      contextRef.current.drawImage(img, 0, 0, width, height);
     };
   };
 
+  const clearAll = () => {
+    if (window.confirm('Clear all drawings?')) {
+      drawBackground();
+      saveToHistory();
+    }
+  };
+
   return (
-    <div className="w-full h-full flex flex-col bg-gray-950 rounded-[40px] overflow-hidden border border-white/10 shadow-2xl relative">
+    <div className="w-full h-full flex flex-col bg-[#f8f9fa] overflow-hidden relative">
       
-      {/* Toolbar */}
-      <div className="absolute top-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 bg-gray-900/80 backdrop-blur-xl px-6 py-3 rounded-2xl border border-white/10 shadow-2xl">
-        
-        <div className="flex gap-1 pr-4 border-r border-white/10">
-          <ToolBtn active={tool === 'pen'} onClick={() => setTool('pen')} icon={<Pencil size={18} />} />
-          <ToolBtn active={tool === 'rectangle'} onClick={() => setTool('rectangle')} icon={<Square size={18} />} />
-          <ToolBtn active={tool === 'arrow'} onClick={() => setTool('arrow')} icon={<ArrowUpRight size={18} />} />
-          <ToolBtn active={tool === 'octagon'} onClick={() => setTool('octagon')} icon={<Hexagon size={18} />} />
+      {/* Top Style Bar */}
+      <div className="h-16 w-full flex items-center justify-between px-6 bg-white border-b border-gray-200 z-30 shadow-sm">
+        <div className="flex items-center gap-10">
+          <StyleGroup label="Ink Style">
+            <div className="flex gap-1.5 p-1 bg-gray-100 rounded-lg">
+              <InkStyleBtn active={inkStyle === 'solid'} onClick={() => setInkStyle('solid')} icon={<SolidLine />} />
+              <InkStyleBtn active={inkStyle === 'dashed'} onClick={() => setInkStyle('dashed')} icon={<DashedLine />} />
+              <InkStyleBtn active={inkStyle === 'neon'} onClick={() => setInkStyle('neon')} icon={<NeonLine />} />
+            </div>
+          </StyleGroup>
+
+          <StyleGroup label="Color">
+            <div className="flex gap-2">
+              {['#000000', '#8b5cf6', '#3b82f6', '#10b981', '#ef4444', '#f59e0b'].map(c => (
+                <button 
+                  key={c}
+                  onClick={() => setColor(c)}
+                  className={`w-6 h-6 rounded-full border-2 transition-transform hover:scale-110 ${color === c ? 'border-indigo-500 scale-110 shadow-lg' : 'border-transparent'}`}
+                  style={{ backgroundColor: c }}
+                />
+              ))}
+              <button className="w-6 h-6 rounded-full border border-gray-200 flex items-center justify-center bg-gray-50 text-gray-400 hover:text-gray-600">
+                <Plus size={14} />
+              </button>
+            </div>
+          </StyleGroup>
+
+          <StyleGroup label="Stroke Width">
+            <div className="flex items-center gap-3 bg-gray-100 p-1.5 rounded-lg">
+              {[2, 3, 4, 6].map(w => (
+                <button 
+                  key={w}
+                  onClick={() => setStrokeWidth(w)}
+                  className={`w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold transition-all ${strokeWidth === w ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                >
+                  {w}
+                </button>
+              ))}
+            </div>
+          </StyleGroup>
         </div>
 
-        <div className="flex gap-2 px-4 border-r border-white/10">
-          {['#ffffff', '#8b5cf6', '#10b981', '#f43f5e'].map(c => (
-            <button 
-              key={c}
-              onClick={() => setColor(c)}
-              className={`w-6 h-6 rounded-full transition-transform hover:scale-125 ${color === c ? 'ring-2 ring-white ring-offset-2 ring-offset-gray-900 scale-110' : ''}`}
-              style={{ backgroundColor: c }}
+        <div className="flex items-center gap-6">
+          <StyleGroup label="Background">
+            <div className="flex gap-2">
+              <button onClick={() => setBackground('white')} className={`w-8 h-8 rounded border transition-all ${background === 'white' ? 'border-indigo-500 bg-white ring-2 ring-indigo-500/10' : 'border-gray-200 bg-white hover:border-gray-300'}`} />
+              <button onClick={() => setBackground('grid')} className={`w-8 h-8 rounded border transition-all flex items-center justify-center ${background === 'grid' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
+                <Grid size={16} className="text-gray-400" />
+              </button>
+            </div>
+          </StyleGroup>
+          <div className="h-8 w-px bg-gray-200 mx-2" />
+          <div className="flex items-center gap-2 text-xs font-bold text-gray-500">
+            <span>100%</span>
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              <button className="w-6 h-6 flex items-center justify-center hover:text-gray-900"><Minus size={14} /></button>
+              <button className="w-6 h-6 flex items-center justify-center hover:text-gray-900"><Plus size={14} /></button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-grow flex relative">
+        {/* Left Toolbar */}
+        <div className="w-20 bg-white border-r border-gray-200 flex flex-col items-center py-6 gap-6 z-30 shadow-lg">
+          <div className="flex flex-col gap-2">
+            <SidebarBtn active={tool === 'select'} onClick={() => setTool('select')} icon={<MousePointer2 size={20} />} label="Select" />
+            <SidebarBtn active={tool === 'pen'} onClick={() => setTool('pen')} icon={<Pencil size={20} />} label="Pen" />
+            <SidebarBtn active={tool === 'marker'} onClick={() => setTool('marker')} icon={<PenLine size={20} />} label="Marker" />
+            <SidebarBtn active={tool === 'highlighter'} onClick={() => setTool('highlighter')} icon={<Highlighter size={20} />} label="Highlight" />
+          </div>
+
+          <div className="w-10 h-px bg-gray-100" />
+
+          <div className="flex flex-col gap-2">
+            <SidebarBtn active={tool === 'rectangle'} onClick={() => setTool('rectangle')} icon={<RectangleHorizontal size={18} />} label="Rect" />
+            <SidebarBtn active={tool === 'square'} onClick={() => setTool('square')} icon={<Square size={18} />} label="Square" />
+            <SidebarBtn active={tool === 'circle'} onClick={() => setTool('circle')} icon={<Circle size={18} />} label="Circle" />
+            <SidebarBtn active={tool === 'octagon'} onClick={() => setTool('octagon')} icon={<Hexagon size={18} />} label="Octagon" />
+            <SidebarBtn active={tool === 'line'} onClick={() => setTool('line')} icon={<Minus size={18} />} label="Line" />
+            <SidebarBtn active={tool === 'arrow'} onClick={() => setTool('arrow')} icon={<ArrowUpRight size={18} />} label="Arrow" />
+          </div>
+
+          <div className="w-10 h-px bg-gray-100" />
+
+          <div className="flex flex-col gap-2">
+            <SidebarBtn active={tool === 'eraser'} onClick={() => setTool('eraser')} icon={<Eraser size={20} />} label="Eraser" />
+            <SidebarBtn active={tool === 'text'} onClick={() => setTool('text')} icon={<Type size={20} />} label="Text" />
+          </div>
+
+          <div className="mt-auto flex flex-col gap-2">
+            <SidebarBtn onClick={undo} icon={<Undo2 size={18} />} label="Undo" />
+            <SidebarBtn onClick={redo} icon={<Redo2 size={18} />} label="Redo" />
+            <SidebarBtn onClick={clearAll} icon={<Trash2 size={18} className="text-red-500" />} label="Clear All" />
+          </div>
+        </div>
+
+        {/* Canvas Area */}
+        <div className="flex-grow relative bg-[#f1f3f5] p-6 overflow-hidden">
+          <div className="w-full h-full bg-white rounded-xl shadow-inner-lg border border-gray-200 overflow-hidden relative">
+            <canvas
+              ref={canvasRef}
+              onMouseDown={startDrawing}
+              onMouseMove={draw}
+              onMouseUp={stopDrawing}
+              onMouseLeave={stopDrawing}
+              className="block w-full h-full cursor-crosshair"
             />
-          ))}
+          </div>
+          
+          {/* Mini Preview or Zoom indicator */}
+          <div className="absolute bottom-10 right-10 flex items-center gap-3 bg-gray-900/90 text-white px-4 py-2 rounded-full border border-white/10 shadow-2xl backdrop-blur-xl">
+             <Search size={16} className="text-gray-400" />
+             <div className="w-24 h-1.5 bg-white/20 rounded-full overflow-hidden">
+                <div className="w-1/3 h-full bg-indigo-500"></div>
+             </div>
+             <Search size={16} className="text-gray-400" />
+          </div>
         </div>
-
-        <div className="flex gap-1 px-4 border-r border-white/10">
-          <StyleBtn active={inkStyle === 'solid'} onClick={() => setInkStyle('solid')} label="S" title="Solid" />
-          <StyleBtn active={inkStyle === 'dashed'} onClick={() => setInkStyle('dashed')} label="D" title="Dashed" />
-          <StyleBtn active={inkStyle === 'neon'} onClick={() => setInkStyle('neon')} label="N" title="Neon" />
-          <StyleBtn active={inkStyle === 'thick'} onClick={() => setInkStyle('thick')} label="T" title="Thick" />
-        </div>
-
-        <div className="flex gap-1 pl-2">
-          <ToolBtn onClick={undo} icon={<Undo2 size={18} />} />
-          <ToolBtn onClick={clearCanvas} icon={<Trash2 size={18} className="text-red-400" />} />
-        </div>
-      </div>
-
-      {/* Canvas */}
-      <div className="flex-grow w-full h-full cursor-crosshair">
-        <canvas
-          ref={canvasRef}
-          onMouseDown={startDrawing}
-          onMouseMove={draw}
-          onMouseUp={stopDrawing}
-          onMouseLeave={stopDrawing}
-          className="block w-full h-full"
-        />
-      </div>
-
-      <div className="absolute bottom-6 right-8 bg-indigo-500/20 px-4 py-2 rounded-xl border border-indigo-500/30 text-[10px] font-black uppercase tracking-widest text-indigo-300 backdrop-blur-md">
-        Whiteboard - Local Mode
       </div>
     </div>
   );
 };
 
-const ToolBtn = ({ active, onClick, icon }) => (
+const StyleGroup = ({ label, children }) => (
+  <div className="flex flex-col gap-1.5">
+    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none">{label}</span>
+    {children}
+  </div>
+);
+
+const SidebarBtn = ({ active, onClick, icon, label }) => (
   <button 
     onClick={onClick}
-    className={`p-2.5 rounded-xl transition-all ${active ? 'bg-indigo-600 text-white shadow-[0_0_15px_rgba(139,92,246,0.5)]' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}
+    className={`w-12 h-12 flex flex-col items-center justify-center gap-1 rounded-xl transition-all group relative ${active ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20 scale-110' : 'text-gray-400 hover:bg-gray-50 hover:text-indigo-600 hover:scale-105'}`}
+  >
+    {icon}
+    <span className={`text-[8px] font-bold uppercase transition-opacity ${active ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>{label}</span>
+  </button>
+);
+
+const InkStyleBtn = ({ active, onClick, icon }) => (
+  <button 
+    onClick={onClick}
+    className={`w-9 h-7 flex items-center justify-center rounded-md transition-all ${active ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-indigo-600'}`}
   >
     {icon}
   </button>
 );
 
-const StyleBtn = ({ active, onClick, label, title }) => (
-  <button 
-    onClick={onClick}
-    title={title}
-    className={`w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-black transition-all ${active ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/50' : 'text-gray-500 hover:text-gray-300'}`}
-  >
-    {label}
-  </button>
-);
+const SolidLine = () => <div className="w-5 h-0.5 bg-current rounded-full" />;
+const DashedLine = () => <div className="w-5 flex gap-0.5"><div className="w-1.5 h-0.5 bg-current rounded-full" /><div className="w-1.5 h-0.5 bg-current rounded-full" /><div className="w-1.5 h-0.5 bg-current rounded-full" /></div>;
+const NeonLine = () => <div className="w-5 h-0.5 bg-current rounded-full shadow-[0_0_5px_currentColor]" />;

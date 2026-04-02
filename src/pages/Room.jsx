@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { Copy, CheckCircle2, Users, Hand, Monitor, X } from 'lucide-react';
+import { Copy, CheckCircle2, Users, Hand, Monitor, X, Video, ShieldCheck, ArrowRight, Cloud, ChevronDown, Mic, MicOff, VideoOff, Search } from 'lucide-react';
 import { useMedia } from '../hooks/useMedia';
 import { useWebRTC } from '../hooks/useWebRTC';
 import { VideoPlayer } from '../components/VideoPlayer';
@@ -20,7 +20,9 @@ export const Room = () => {
   const [isParticipantsOpen, setIsParticipantsOpen] = useState(false); // Default hidden for mobile
   const [theme, setTheme] = useState('dark');
   const [isHandRaised, setIsHandRaised] = useState(false);
-  const [isWhiteboardOpen, setIsWhiteboardOpen] = useState(false);
+  const [isWhiteboardOpen, setIsWhiteboardOpen] = useState(true); // Default to Whiteboard per Elite Design
+  const [isMediaLoading, setIsMediaLoading] = useState(true);
+  const [meetingTitle, setMeetingTitle] = useState('Math Class - Algebra Basics');
 
   // New Interface States
   const [activeParticipantId, setActiveParticipantId] = useState('local');
@@ -56,9 +58,14 @@ export const Room = () => {
 
   // Start media directly on load
   useEffect(() => {
-    if (username) {
-      startMedia();
-    }
+    const initMedia = async () => {
+      if (username) {
+        setIsMediaLoading(true);
+        await startMedia();
+        setIsMediaLoading(false);
+      }
+    };
+    initMedia();
     return () => {
       stopMedia();
     };
@@ -163,30 +170,45 @@ export const Room = () => {
       theme === 'dark' ? 'bg-[#0a0a0a] text-white' : 'bg-gray-50 text-gray-900'
     }`}>
       
-      {/* Header */}
-      <div className="absolute top-0 w-full z-40 p-4 sm:p-6 flex justify-between items-center pointer-events-none">
-        <div className={`flex items-center gap-3 backdrop-blur-md px-4 py-2 rounded-2xl border transition shadow-lg pointer-events-auto ${
-          theme === 'dark' ? 'bg-gray-900/50 border-gray-800' : 'bg-white/80 border-gray-200'
-        }`}>
-          <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center">
-            <span className="text-white font-bold text-sm">MS</span>
+      {/* Elite Top Header */}
+      <div className="w-full z-40 p-4 sm:p-6 flex justify-between items-center glass border-b border-white/5 backdrop-blur-3xl">
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow-[0_0_20px_rgba(79,70,229,0.5)]">
+               <Video className="text-white" size={20} />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-sm font-bold tracking-tight text-white flex items-center gap-2">
+                {meetingTitle} <ShieldCheck size={14} className="text-emerald-500" />
+              </span>
+              <div className="flex items-center gap-3 text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                <span>Meeting ID: {roomId}</span>
+                <span className="flex items-center gap-1.5 border-l border-white/10 pl-3">
+                  <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+                  Recording  12:45
+                </span>
+              </div>
+            </div>
           </div>
-          <span className="font-semibold hidden sm:inline-block">MeetSpace</span>
         </div>
 
-        <div 
-          onClick={handleCopyCode}
-          className={`flex items-center gap-3 backdrop-blur-md px-4 py-2 rounded-2xl border pointer-events-auto cursor-pointer transition shadow-lg group ${
-            theme === 'dark' ? 'bg-gray-900/80 hover:bg-gray-800 border-gray-700' : 'bg-white/90 hover:bg-white border-gray-200'
-          }`}
-        >
-          <div className="flex flex-col text-right">
-            <span className="text-[10px] uppercase text-gray-400 font-bold tracking-wider">Room Code</span>
-            <span className={`font-mono font-bold ${theme === 'dark' ? 'text-indigo-300' : 'text-indigo-600'}`}>{roomId}</span>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 bg-gray-900/60 p-1.5 rounded-xl border border-white/10">
+            <div className="px-3 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 font-black text-[10px] flex items-center gap-2">
+              <Users size={14} /> 6
+            </div>
+            <div className="relative group">
+              <button 
+                className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs font-bold transition-all"
+                onClick={() => setIsWhiteboardOpen(!isWhiteboardOpen)}
+              >
+                View: {isWhiteboardOpen ? 'Whiteboard' : 'Video Call'} <ArrowRight size={14} className="rotate-90" />
+              </button>
+            </div>
           </div>
-          <div className="bg-indigo-500/10 p-2 rounded-lg text-indigo-500 group-hover:scale-110 transition">
-            {copied ? <CheckCircle2 size={16} /> : <Copy size={16} />}
-          </div>
+          <button className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-gray-400 hover:text-white transition-all">
+            <Monitor size={18} />
+          </button>
         </div>
       </div>
 
@@ -212,7 +234,22 @@ export const Room = () => {
           <div className="w-full h-full max-w-6xl max-h-[85vh] sm:max-h-[80vh] flex items-center justify-center bg-white/5 rounded-[32px] sm:rounded-[40px] overflow-hidden shadow-[0_20px_80px_-20px_rgba(79,70,229,0.3)] border border-white/10 relative group">
              <div className="absolute -top-32 -left-32 w-64 h-64 bg-indigo-500/10 blur-[100px] pointer-events-none transition-all group-hover:bg-indigo-500/20"></div>
              
-             {isWhiteboardOpen ? (
+             {isMediaLoading ? (
+               <div className="flex flex-col items-center gap-6 text-gray-500">
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-indigo-500/20 blur-2xl rounded-full animate-pulse scale-150"></div>
+                    <div className="relative p-8 bg-white/5 rounded-full border border-white/10 animate-fade-in">
+                      <Cloud size={64} className="text-indigo-400 opacity-80" />
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-center gap-2">
+                    <p className="font-black tracking-[0.2em] uppercase text-[10px] text-white/50">Establishing Secure P2P Tunnel...</p>
+                    <div className="w-48 h-1 bg-white/5 rounded-full overflow-hidden">
+                      <div className="w-1/2 h-full bg-indigo-500 animate-[loading_1.5s_infinite]"></div>
+                    </div>
+                  </div>
+               </div>
+             ) : isWhiteboardOpen ? (
                <Whiteboard onClose={() => setIsWhiteboardOpen(false)} theme={theme} />
              ) : activeItem ? (
                <VideoPlayer 
@@ -224,117 +261,82 @@ export const Room = () => {
                   isHandRaised={activeItem.isHandRaised}
                   type={activeItem.type}
                />
-             ) : (
-               <div className="flex flex-col items-center gap-4 text-gray-500">
-                  <div className="p-6 bg-white/5 rounded-3xl border border-white/10 animate-pulse">
-                    <Users size={64} className="opacity-20" />
-                  </div>
-                  <p className="font-bold tracking-widest uppercase text-xs">Connecting...</p>
-               </div>
-             )}
+             ) : null}
           </div>
         </div>
 
-        {/* Side Panel Area: Fixed Drawer on Mobile, Relative on Desktop */}
+        {/* Side Panel Area: Persistent Elite Participants List */}
         <div 
           className={`
             fixed md:relative top-0 right-0 h-full w-[85%] md:w-80 max-w-sm md:max-w-none z-[50] md:z-30
-            glass-card border-l md:border-t-0 border-white/10 flex flex-col 
-            transition-transform duration-300 ease-in-out
-            ${(isParticipantsOpen || isChatOpen) ? 'translate-x-0' : 'translate-x-full md:hidden'}
-            ${panelSide === 'left' ? 'left-0 border-r border-l-0' : 'right-0 border-l'}
+            bg-[#0d0f14] border-l border-white/5 flex flex-col 
+            transition-all duration-500 ease-in-out
+            ${(isParticipantsOpen || isChatOpen || true) ? 'translate-x-0' : 'translate-x-full md:hidden'}
           `}
         >
-          {isParticipantsOpen ? (
-            <div className="flex flex-col h-full">
-              <div className="p-6 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center">
-                    <Users size={16} className="text-indigo-400" />
-                  </div>
-                  <span className="font-bold text-sm tracking-tight text-white uppercase">In Call ({viewableItems.length})</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <button 
-                    onClick={() => setPanelSide(panelSide === 'right' ? 'left' : 'right')}
-                    className="p-2 hover:bg-white/5 rounded-xl transition-all text-gray-400 hover:text-white hidden md:block"
-                    title={`Move to ${panelSide === 'right' ? 'left' : 'right'}`}
-                  >
-                    {panelSide === 'right' ? <Copy className="-scale-x-100" size={16} /> : <Copy size={16} />}
-                  </button>
-                  <button 
-                    onClick={() => { setIsParticipantsOpen(false); setIsChatOpen(false); }}
-                    className="p-2 hover:bg-white/5 rounded-xl transition-all text-gray-400 hover:text-white"
-                  >
-                    <X size={20} />
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
-                {paginatedParticipants.map((item) => (
-                  <div 
-                    key={item.id} 
-                    onClick={() => setActiveParticipantId(item.id)}
-                    className={`group relative aspect-video w-full rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 border-2 ${
-                      activeParticipantId === item.id 
-                        ? 'border-indigo-500 ring-4 ring-indigo-500/10 scale-[1.02] shadow-[0_0_20px_rgba(79,70,229,0.3)]' 
-                        : 'border-white/5 hover:border-white/20'
-                    }`}
-                  >
-                    <div className="absolute inset-0 z-0 opacity-60">
-                       <VideoPlayer 
-                          stream={item.stream} 
-                          isLocal={item.isLocal} 
-                          username={item.username} 
-                          isVideoEnabled={item.isVideoEnabled}
-                          isAudioMuted={item.isAudioMuted}
-                          isSmall={true}
-                          type={item.type}
-                       />
-                    </div>
-                    <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/80 to-transparent z-10">
-                       <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-bold text-white/90 truncate max-w-[120px] uppercase tracking-wider">
-                            {item.username} {item.isLocal && "(You)"}
-                          </span>
-                          {item.type === 'screen' && <Monitor size={10} className="text-indigo-400" />}
-                       </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="p-4 border-t border-white/5 flex gap-2 bg-white/[0.02]">
-                <button 
-                  disabled={!canGoPrev}
-                  onClick={() => setPanelStartIndex(Math.max(0, panelStartIndex - 5))}
-                  className="flex-1 py-3 px-4 rounded-xl bg-white/5 hover:bg-white/10 disabled:opacity-20 transition-all text-[10px] font-black uppercase tracking-widest text-gray-300 border border-white/5"
-                >
-                  Prev
-                </button>
-                <button 
-                  disabled={!canGoNext}
-                  onClick={() => setPanelStartIndex(Math.min(viewableItems.length - 1, panelStartIndex + 5))}
-                  className="flex-1 py-3 px-4 rounded-xl bg-white/5 hover:bg-white/10 disabled:opacity-20 transition-all text-[10px] font-black uppercase tracking-widest text-gray-300 border border-white/5"
-                >
-                  Next
-                </button>
-              </div>
+          <div className="flex flex-col h-full">
+            <div className="p-6 border-b border-white/5 flex justify-between items-center">
+              <span className="font-bold text-sm tracking-tight text-white/90">Participants ({viewableItems.length})</span>
+              <ChevronDown size={18} className="text-gray-500" />
             </div>
-          ) : isChatOpen ? (
-            <SidePanel 
-              messages={messages} 
-              onSendMessage={sendChatMessage} 
-              onClose={() => setIsChatOpen(false)}
-              peers={peers}
-              username={username}
-              remoteStatuses={remoteStatuses}
-              isAudioEnabled={isAudioEnabled}
-              isVideoEnabled={isVideoEnabled}
-              isHandRaised={isHandRaised}
-            />
-          ) : null}
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+              {viewableItems.map((item) => (
+                <div 
+                  key={item.id} 
+                  onClick={() => setActiveParticipantId(item.id)}
+                  className={`group relative p-3 rounded-2xl transition-all border border-transparent flex items-center justify-between cursor-pointer ${
+                    activeParticipantId === item.id 
+                      ? 'bg-indigo-500/10 border-indigo-500/20' 
+                      : 'hover:bg-white/5'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      {item.isLocal ? (
+                        <div className="w-12 h-12 rounded-xl border border-white/10 overflow-hidden">
+                           <VideoPlayer stream={item.stream} isLocal={true} isSmall={true} />
+                        </div>
+                      ) : (
+                        <div className={`w-12 h-12 rounded-xl border border-white/10 flex items-center justify-center font-bold text-lg bg-gray-800 text-white/20`}>
+                           {item.username.charAt(0)}
+                        </div>
+                      )}
+                      {(activeParticipantId === item.id || item.isLocal) && (
+                        <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-indigo-500 rounded-full border-2 border-[#0d0f14] shadow-lg shadow-indigo-500/40"></div>
+                      )}
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-[11px] font-bold text-white leading-tight">
+                        {item.username} {item.isLocal && "(You)"}
+                      </span>
+                      <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest mt-0.5">
+                        {item.isLocal ? 'Host' : 'Participant'}
+                      </span>
+                      {item.type === 'screen' && (
+                        <div className="flex items-center gap-1.5 mt-1.5 px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 w-fit">
+                           <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></div>
+                           <span className="text-[8px] font-bold text-emerald-400 uppercase tracking-widest">Sharing Screen</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {item.isAudioMuted ? <MicOff size={14} className="text-rose-500" /> : <Mic size={14} className="text-emerald-500" />}
+                    {item.isVideoEnabled ? <Video size={14} className="text-emerald-500" /> : <VideoOff size={14} className="text-rose-500" />}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="p-6 border-t border-white/5">
+              <button 
+                className="w-full py-4 rounded-2xl bg-white/5 border border-white/10 text-white/40 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-white/10 hover:text-white transition-all"
+              >
+                View More ({Math.max(0, viewableItems.length - 10)}) <ChevronDown size={14} />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
