@@ -91,7 +91,18 @@ export const useWebRTC = (roomId, localStream, screenStream, username, isVideoEn
               setRemoteStreams(prev => ({ ...prev, [targetPeerId]: remoteStream }));
             }
             
-            setRemoteStatuses(prev => ({ ...prev, [targetPeerId]: { ...(prev[targetPeerId] || {}), video: true, audio: true } }));
+            // Critical Resilience: Wait for track to be unmuted (actively receiving data)
+            event.track.onunmute = () => {
+              console.log(`Track unmuted for ${targetPeerId}:`, event.track.kind);
+              setRemoteStatuses(prev => ({ 
+                ...prev, 
+                [targetPeerId]: { 
+                  ...(prev[targetPeerId] || {}), 
+                  video: true, 
+                  audio: true 
+                } 
+              }));
+            };
          }
       };
 
@@ -267,7 +278,9 @@ export const useWebRTC = (roomId, localStream, screenStream, username, isVideoEn
        if (localStream) {
          const audioTrack = localStream.getAudioTracks()[0];
          const audioSender = senders.find(s => s.track?.kind === 'audio');
-         if (!audioSender && audioTrack) {
+         if (audioSender && audioTrack && audioSender.track !== audioTrack) {
+           await audioSender.replaceTrack(audioTrack).catch(e => console.error(e));
+         } else if (!audioSender && audioTrack) {
            pc.addTrack(audioTrack, localStream);
          }
        }
