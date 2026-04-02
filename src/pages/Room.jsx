@@ -20,7 +20,7 @@ export const Room = () => {
   const [isParticipantsOpen, setIsParticipantsOpen] = useState(false); // Default hidden for mobile
   const [theme, setTheme] = useState('dark');
   const [isHandRaised, setIsHandRaised] = useState(false);
-  const [isWhiteboardOpen, setIsWhiteboardOpen] = useState(true); // Default to Whiteboard per Elite Design
+  const [isWhiteboardOpen, setIsWhiteboardOpen] = useState(false);
   const [isMediaLoading, setIsMediaLoading] = useState(true);
   const [meetingTitle, setMeetingTitle] = useState('Math Class - Algebra Basics');
 
@@ -96,7 +96,17 @@ export const Room = () => {
     raiseHand(val);
   };
 
-  if (!username) return null;
+  useEffect(() => {
+    if (!username) {
+      navigate('/');
+    }
+  }, [username, navigate]);
+
+  if (!username) return (
+    <div className="h-screen w-full flex items-center justify-center bg-[#0a0a0a]">
+      <div className="text-white text-xs font-black uppercase tracking-[0.3em] animate-pulse">Redirecting...</div>
+    </div>
+  );
 
   // Build the list of all "viewable" items (Participants + Screens)
   const viewableItems = [
@@ -221,7 +231,7 @@ export const Room = () => {
       )}
 
       {/* Main Content: Flex Row with Main View and Side Panel */}
-      <div className={`flex-grow w-full h-full flex flex-row overflow-hidden relative ${panelSide === 'left' ? 'md:flex-row-reverse' : ''}`}>
+      <div className={`flex-grow w-full h-full flex flex-col md:flex-row overflow-hidden relative ${panelSide === 'left' ? 'md:flex-row-reverse' : ''}`}>
         
         {/* Main Video View Area */}
         <div className="flex-grow h-full p-2 sm:p-8 flex items-center justify-center relative animate-fade-in-up">
@@ -271,7 +281,7 @@ export const Room = () => {
             fixed md:relative top-0 right-0 h-full w-[85%] md:w-80 max-w-sm md:max-w-none z-[50] md:z-30
             bg-[#0d0f14] border-l border-white/5 flex flex-col 
             transition-all duration-500 ease-in-out
-            ${(isParticipantsOpen || isChatOpen || true) ? 'translate-x-0' : 'translate-x-full md:hidden'}
+            ${(isParticipantsOpen || isChatOpen) ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}
           `}
         >
           <div className="flex flex-col h-full">

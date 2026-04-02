@@ -18,7 +18,8 @@ import {
   MoreHorizontal,
   Grid,
   Plus,
-  ChevronDown
+  ChevronDown,
+  Search
 } from 'lucide-react';
 
 export const Whiteboard = ({ onClose, theme = 'dark' }) => {
