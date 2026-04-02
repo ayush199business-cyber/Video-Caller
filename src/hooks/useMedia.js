@@ -80,18 +80,25 @@ export const useMedia = () => {
       setScreenStream(null);
       setIsScreenSharing(false);
     } else {
-      // Start screen sharing
-      try {
-        // Mobile Chrome Fix: audio: false and specific video constraints
-        const displayMediaOptions = {
-          video: {
-            cursor: "always",
-            displaySurface: "monitor" 
-          },
-          audio: false // Avoid audio constraints on mobile screen share
-        };
+      // Basic checks
+      if (!window.isSecureContext) {
+        setError("Screen sharing requires a secure HTTPS connection.");
+        return;
+      }
 
-        const screen = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
+      if (!navigator.mediaDevices?.getDisplayMedia) {
+        setError("Screen sharing is not supported in this browser.");
+        return;
+      }
+
+      try {
+        // Mobile browsers often fail if we specify 'monitor' or 'cursor'
+        // We use simple constraints for maximum compatibility
+        const screen = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: false
+        });
+
         const screenTrack = screen.getVideoTracks()[0];
 
         // Handle "Stop Sharing" button in browser UI
@@ -104,11 +111,20 @@ export const useMedia = () => {
         screenStreamRef.current = screen;
         setScreenStream(screen);
         setIsScreenSharing(true);
+        setError(null);
       } catch (err) {
         console.error("Screen share error:", err);
-        if (err.name !== 'NotAllowedError') {
-          setError("Failed to start screen sharing. Ensure you are on a secure connection (HTTPS).");
+        
+        let msg = "Failed to start screen sharing.";
+        if (err.name === 'NotAllowedError') {
+          msg = "Permission denied. Please allow screen recording.";
+        } else if (err.name === 'NotSupportedError') {
+          msg = "Screen sharing is not supported on this device/browser.";
+        } else {
+          msg = `Error: ${err.message || err.name}`;
         }
+        
+        setError(msg);
       }
     }
   }, [isScreenSharing]);
