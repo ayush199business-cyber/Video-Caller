@@ -11,9 +11,10 @@ const SidePanel = ({
   remoteStatuses,
   isAudioEnabled,
   isVideoEnabled,
-  isHandRaised
+  isHandRaised,
+  initialTab = 'chat'
 }) => {
-  const [activeTab, setActiveTab] = useState('chat');
+  const [activeTab, setActiveTab] = useState(initialTab);
 
   const participantsCount = Object.keys(peers).length + 1;
 

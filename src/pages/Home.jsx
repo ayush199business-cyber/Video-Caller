@@ -20,6 +20,7 @@ import cameraGlow from '../assets/camera_glow.png';
 export const Home = () => {
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
+  const [meetingName, setMeetingName] = useState('');
   const [meetingCode, setMeetingCode] = useState('');
   const [error, setError] = useState('');
   const [mode, setMode] = useState('select'); // 'select', 'create', 'join'
@@ -31,7 +32,7 @@ export const Home = () => {
       return;
     }
     const code = generateMeetingCode();
-    navigate(`/room/${code}`, { state: { username } });
+    navigate(`/room/${code}`, { state: { username, meetingName } });
   };
 
   const handleJoinByCode = (e) => {
@@ -147,6 +148,17 @@ export const Home = () => {
                     value={username}
                     onChange={(e) => { setUsername(e.target.value); setError(''); }}
                     placeholder="Enter your name"
+                    className="w-full glass bg-white/5 border-white/10 focus:border-indigo-500/50 rounded-2xl px-6 py-4 text-white outline-none transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] uppercase tracking-widest font-bold text-gray-500 mb-2 block ml-1">Meeting Name (Optional)</label>
+                  <input
+                    type="text"
+                    value={meetingName}
+                    onChange={(e) => { setMeetingName(e.target.value); setError(''); }}
+                    placeholder="e.g. Architecture Sync"
                     className="w-full glass bg-white/5 border-white/10 focus:border-indigo-500/50 rounded-2xl px-6 py-4 text-white outline-none transition-all"
                   />
                 </div>

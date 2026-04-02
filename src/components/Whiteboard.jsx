@@ -19,7 +19,9 @@ import {
   Grid,
   Plus,
   ChevronDown,
-  Search
+  Search,
+  Triangle,
+  Star
 } from 'lucide-react';
 
 export const Whiteboard = ({ onClose, theme = 'dark' }) => {
@@ -194,8 +196,46 @@ export const Whiteboard = ({ onClose, theme = 'dark' }) => {
       case 'octagon': drawOctagon(ctx, x1, y1, x2, y2); break;
       case 'line': ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); break;
       case 'arrow': drawArrow(ctx, x1, y1, x2, y2); break;
+      case 'triangle': drawTriangle(ctx, x1, y1, x2, y2); break;
+      case 'star': drawStar(ctx, x1, y1, x2, y2); break;
       case 'eraser': eraser(ctx, x2, y2); break;
     }
+  };
+
+  const drawTriangle = (ctx, x1, y1, x2, y2) => {
+    ctx.moveTo((x1 + x2) / 2, y1);
+    ctx.lineTo(x1, y2);
+    ctx.lineTo(x2, y2);
+    ctx.closePath();
+    ctx.stroke();
+  };
+
+  const drawStar = (ctx, x1, y1, x2, y2) => {
+    const cx = (x1 + x2) / 2;
+    const cy = (y1 + y2) / 2;
+    const outerRadius = Math.abs(x2 - x1) / 2;
+    const innerRadius = outerRadius / 2;
+    const spikes = 5;
+    let rot = Math.PI / 2 * 3;
+    let x = cx;
+    let y = cy;
+    let step = Math.PI / spikes;
+
+    ctx.moveTo(cx, cy - outerRadius);
+    for (let i = 0; i < spikes; i++) {
+        x = cx + Math.cos(rot) * outerRadius;
+        y = cy + Math.sin(rot) * outerRadius;
+        ctx.lineTo(x, y);
+        rot += step;
+
+        x = cx + Math.cos(rot) * innerRadius;
+        y = cy + Math.sin(rot) * innerRadius;
+        ctx.lineTo(x, y);
+        rot += step;
+    }
+    ctx.lineTo(cx, cy - outerRadius);
+    ctx.closePath();
+    ctx.stroke();
   };
 
   const drawOctagon = (ctx, x1, y1, x2, y2) => {
@@ -343,6 +383,8 @@ export const Whiteboard = ({ onClose, theme = 'dark' }) => {
             <SidebarBtn active={tool === 'octagon'} onClick={() => setTool('octagon')} icon={<Hexagon size={18} />} label="Octagon" />
             <SidebarBtn active={tool === 'line'} onClick={() => setTool('line')} icon={<Minus size={18} />} label="Line" />
             <SidebarBtn active={tool === 'arrow'} onClick={() => setTool('arrow')} icon={<ArrowUpRight size={18} />} label="Arrow" />
+            <SidebarBtn active={tool === 'triangle'} onClick={() => setTool('triangle')} icon={<Triangle size={18} />} label="Triangle" />
+            <SidebarBtn active={tool === 'star'} onClick={() => setTool('star')} icon={<Star size={18} />} label="Star" />
           </div>
 
           <div className="w-10 h-px bg-gray-100" />

@@ -20,9 +20,10 @@ export const Room = () => {
   const [isParticipantsOpen, setIsParticipantsOpen] = useState(false); // Default hidden for mobile
   const [theme, setTheme] = useState('dark');
   const [isHandRaised, setIsHandRaised] = useState(false);
-  const [isWhiteboardOpen, setIsWhiteboardOpen] = useState(false);
   const [isMediaLoading, setIsMediaLoading] = useState(true);
-  const [meetingTitle, setMeetingTitle] = useState('Math Class - Algebra Basics');
+  const [meetingTitle, setMeetingTitle] = useState(location.state?.meetingName || 'Untitled Meeting');
+  const [isRecording, setIsRecording] = useState(false);
+  const [recorder, setRecorder] = useState(null);
 
   // New Interface States
   const [activeParticipantId, setActiveParticipantId] = useState('local');
@@ -55,6 +56,48 @@ export const Room = () => {
     sendReaction,
     raiseHand
   } = useWebRTC(roomId, localStream, screenStream, username, isVideoEnabled, isAudioEnabled);
+
+  const handleRecording = async () => {
+    if (isRecording) {
+      if (recorder) {
+        recorder.stop();
+        setIsRecording(false);
+      }
+      return;
+    }
+
+    try {
+      // Capture the browser window for the recording
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { displaySurface: "browser" },
+        audio: true
+      });
+
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+      const chunks = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'video/webm' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `MeetSpace-Recording-${meetingTitle}-${Date.now()}.webm`;
+        a.click();
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
+      setRecorder(mediaRecorder);
+      setIsRecording(true);
+    } catch (err) {
+      console.error("Recording failed:", err);
+      // Browser will show the denied prompt automatically if NotAllowedError
+    }
+  };
 
   // Start media directly on load
   useEffect(() => {
@@ -193,9 +236,9 @@ export const Room = () => {
               </span>
               <div className="flex items-center gap-3 text-[10px] text-gray-400 font-bold uppercase tracking-widest">
                 <span>Meeting ID: {roomId}</span>
-                <span className="flex items-center gap-1.5 border-l border-white/10 pl-3">
-                  <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
-                  Recording  12:45
+                <span className={`flex items-center gap-1.5 border-l border-white/10 pl-3 transition-opacity ${isRecording ? 'opacity-100' : 'opacity-40'}`}>
+                  <div className={`w-2 h-2 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-gray-500'}`}></div>
+                  {isRecording ? 'Recording Session' : 'Ready to Record'}
                 </span>
               </div>
             </div>
@@ -203,16 +246,16 @@ export const Room = () => {
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 bg-gray-900/60 p-1.5 rounded-xl border border-white/10">
+          <div className="flex items-center gap-2 bg-gray-900/60 p-1.5 rounded-xl border border-white/10 shadow-2xl">
             <div className="px-3 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 font-black text-[10px] flex items-center gap-2">
-              <Users size={14} /> 6
+              <Users size={14} /> {viewableItems.length}
             </div>
             <div className="relative group">
               <button 
-                className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs font-bold transition-all"
-                onClick={() => setIsWhiteboardOpen(!isWhiteboardOpen)}
+                className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 border border-indigo-400 text-white text-xs font-bold transition-all shadow-lg active:scale-95"
+                onClick={() => window.open(`/whiteboard/${roomId}`, '_blank')}
               >
-                View: {isWhiteboardOpen ? 'Whiteboard' : 'Video Call'} <ArrowRight size={14} className="rotate-90" />
+                 Open Elite Whiteboard <ArrowRight size={14} />
               </button>
             </div>
           </div>
@@ -259,8 +302,6 @@ export const Room = () => {
                     </div>
                   </div>
                </div>
-             ) : isWhiteboardOpen ? (
-               <Whiteboard onClose={() => setIsWhiteboardOpen(false)} theme={theme} />
              ) : activeItem ? (
                <VideoPlayer 
                   stream={activeItem.stream} 
@@ -279,74 +320,22 @@ export const Room = () => {
         <div 
           className={`
             fixed md:relative top-0 right-0 h-full w-[85%] md:w-80 max-w-sm md:max-w-none z-[50] md:z-30
-            bg-[#0d0f14] border-l border-white/5 flex flex-col 
             transition-all duration-500 ease-in-out
-            ${(isParticipantsOpen || isChatOpen) ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}
+            ${(isParticipantsOpen || isChatOpen) ? 'translate-x-0' : 'translate-x-full'}
           `}
         >
-          <div className="flex flex-col h-full">
-            <div className="p-6 border-b border-white/5 flex justify-between items-center">
-              <span className="font-bold text-sm tracking-tight text-white/90">Participants ({viewableItems.length})</span>
-              <ChevronDown size={18} className="text-gray-500" />
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
-              {viewableItems.map((item) => (
-                <div 
-                  key={item.id} 
-                  onClick={() => setActiveParticipantId(item.id)}
-                  className={`group relative p-3 rounded-2xl transition-all border border-transparent flex items-center justify-between cursor-pointer ${
-                    activeParticipantId === item.id 
-                      ? 'bg-indigo-500/10 border-indigo-500/20' 
-                      : 'hover:bg-white/5'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="relative">
-                      {item.isLocal ? (
-                        <div className="w-12 h-12 rounded-xl border border-white/10 overflow-hidden">
-                           <VideoPlayer stream={item.stream} isLocal={true} isSmall={true} />
-                        </div>
-                      ) : (
-                        <div className={`w-12 h-12 rounded-xl border border-white/10 flex items-center justify-center font-bold text-lg bg-gray-800 text-white/20`}>
-                           {item.username.charAt(0)}
-                        </div>
-                      )}
-                      {(activeParticipantId === item.id || item.isLocal) && (
-                        <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-indigo-500 rounded-full border-2 border-[#0d0f14] shadow-lg shadow-indigo-500/40"></div>
-                      )}
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-[11px] font-bold text-white leading-tight">
-                        {item.username} {item.isLocal && "(You)"}
-                      </span>
-                      <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest mt-0.5">
-                        {item.isLocal ? 'Host' : 'Participant'}
-                      </span>
-                      {item.type === 'screen' && (
-                        <div className="flex items-center gap-1.5 mt-1.5 px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 w-fit">
-                           <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></div>
-                           <span className="text-[8px] font-bold text-emerald-400 uppercase tracking-widest">Sharing Screen</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    {item.isAudioMuted ? <MicOff size={14} className="text-rose-500" /> : <Mic size={14} className="text-emerald-500" />}
-                    {item.isVideoEnabled ? <Video size={14} className="text-emerald-500" /> : <VideoOff size={14} className="text-rose-500" />}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="p-6 border-t border-white/5">
-              <button 
-                className="w-full py-4 rounded-2xl bg-white/5 border border-white/10 text-white/40 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-white/10 hover:text-white transition-all"
-              >
-                View More ({Math.max(0, viewableItems.length - 10)}) <ChevronDown size={14} />
-              </button>
-            </div>
-          </div>
+          <SidePanel 
+            messages={messages}
+            onSendMessage={sendChatMessage}
+            onClose={() => { setIsChatOpen(false); setIsParticipantsOpen(false); }}
+            peers={peers}
+            username={username}
+            remoteStatuses={remoteStatuses}
+            isAudioEnabled={isAudioEnabled}
+            isVideoEnabled={isVideoEnabled}
+            isHandRaised={isHandRaised}
+            initialTab={isChatOpen ? 'chat' : 'participants'}
+          />
         </div>
       </div>
 
@@ -367,9 +356,10 @@ export const Room = () => {
         toggleParticipants={toggleParticipants}
         theme={theme}
         toggleTheme={toggleTheme}
-        isWhiteboardOpen={isWhiteboardOpen}
-        toggleWhiteboard={() => setIsWhiteboardOpen(!isWhiteboardOpen)}
+        toggleWhiteboard={() => window.open(`/whiteboard/${roomId}`, '_blank')}
         stopMedia={stopMedia}
+        isRecording={isRecording}
+        toggleRecording={handleRecording}
       />
 
       <style>{`

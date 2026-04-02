@@ -20,7 +20,8 @@ export const Controls = ({
   isAudioEnabled, isVideoEnabled, isChatOpen, isScreenSharing, isHandRaised,
   toggleAudio, toggleVideo, toggleChat, toggleScreenShare, raiseHand, 
   sendReaction, isParticipantsOpen, toggleParticipants, theme, toggleTheme,
-  isWhiteboardOpen, toggleWhiteboard,
+  toggleWhiteboard,
+  isRecording, toggleRecording,
   stopMedia 
 }) => {
   const navigate = useNavigate();
@@ -58,7 +59,6 @@ export const Controls = ({
             active={isParticipantsOpen} 
             onClick={toggleParticipants} 
             icon={<Users size={20} />} 
-            badge={6}
             title="Participants"
           />
           <ControlBtn 
@@ -68,11 +68,17 @@ export const Controls = ({
             title="Chat"
           />
           <ControlBtn 
-            active={isWhiteboardOpen} 
             onClick={toggleWhiteboard} 
             icon={<Pencil size={20} />} 
-            title="Whiteboard"
-            indigo={isWhiteboardOpen}
+            title="Open Standalone Whiteboard"
+            indigo={true}
+          />
+          <ControlBtn 
+            active={isRecording} 
+            onClick={toggleRecording} 
+            icon={<div className={`w-3 h-3 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-gray-500'}`} />} 
+            title={isRecording ? 'Stop Recording' : 'Start Recording'}
+            danger={isRecording}
           />
           <ControlBtn 
             active={isScreenSharing} 
