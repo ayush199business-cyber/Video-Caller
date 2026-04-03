@@ -79,10 +79,10 @@ export const useWebRTC = (roomId, localStream, screenStream, username, isVideoEn
          const targetStream = event.streams[0] || new MediaStream();
          
          // Distinguish between camera and screen share
-         // Screen tracks usually have 'screen' or 'window' in their label
          const isScreen = event.track.label.toLowerCase().includes('screen') || 
                           event.track.label.toLowerCase().includes('window') ||
-                          (event.streams[0]?.id && event.streams[0].id.includes('screen'));
+                          (event.streams[0]?.id && event.streams[0].id.includes('screen')) ||
+                          event.track.kind === 'video' && pc.getReceivers().filter(r => r.track?.kind === 'video').length > 1; // Fallback heuristic
          
          if (isScreen) {
            setRemoteScreenStreams(prev => {
@@ -102,7 +102,6 @@ export const useWebRTC = (roomId, localStream, screenStream, username, isVideoEn
            });
          }
          
-         // Critical Resilience: Ensure track is unmuted and state is updated
          event.track.onunmute = () => {
            console.log(`Track unmuted for ${targetPeerId}:`, event.track.kind);
            setRemoteStatuses(prev => ({ 
@@ -112,11 +111,6 @@ export const useWebRTC = (roomId, localStream, screenStream, username, isVideoEn
                [event.track.kind]: true 
              } 
            }));
-         };
-
-         // If track ends, check if we need to remove it
-         event.track.onended = () => {
-           console.log(`Track ended for ${targetPeerId}:`, event.track.kind);
          };
       };
 
@@ -140,13 +134,23 @@ export const useWebRTC = (roomId, localStream, screenStream, username, isVideoEn
       return pc;
     };
 
+    const iceCandidateQueue = {};
+
+    const processIceQueue = async (peerId, pc) => {
+      if (iceCandidateQueue[peerId] && pc.remoteDescription) {
+        for (const candidate of iceCandidateQueue[peerId]) {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(err => console.warn("Queued ICE Error:", err));
+        }
+        iceCandidateQueue[peerId] = [];
+      }
+    };
+
     ws.onmessage = async (event) => {
       try {
         const msg = JSON.parse(event.data);
         
         switch (msg.type) {
           case 'room_state':
-             // Creates outgoing physical socket rails for everyone already inside
              msg.peers.forEach(existingPeerId => {
                 createPeerConnection(existingPeerId, true);
              });
@@ -160,6 +164,8 @@ export const useWebRTC = (roomId, localStream, screenStream, username, isVideoEn
 
                 const pc = createPeerConnection(senderPeerId, false);
                 await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+                processIceQueue(senderPeerId, pc);
+
                 const answer = await pc.createAnswer();
                 await pc.setLocalDescription(answer);
                 
@@ -182,14 +188,22 @@ export const useWebRTC = (roomId, localStream, screenStream, username, isVideoEn
                 if (peerStatus) setRemoteStatuses(prev => ({ ...prev, [senderPeerId]: peerStatus }));
                 
                 const pc = rtcConnections.current[senderPeerId];
-                if (pc) await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+                if (pc) {
+                   await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+                   processIceQueue(senderPeerId, pc);
+                }
              }
              break;
              
           case 'candidate':
              {
                 const pc = rtcConnections.current[msg.senderPeerId];
-                if (pc) await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
+                if (pc && pc.remoteDescription) {
+                   await pc.addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(err => console.warn("ICE Error:", err));
+                } else {
+                   if (!iceCandidateQueue[msg.senderPeerId]) iceCandidateQueue[msg.senderPeerId] = [];
+                   iceCandidateQueue[msg.senderPeerId].push(msg.candidate);
+                }
              }
              break;
              
@@ -200,6 +214,7 @@ export const useWebRTC = (roomId, localStream, screenStream, username, isVideoEn
                    rtcConnections.current[leftPeerId].close();
                    delete rtcConnections.current[leftPeerId];
                 }
+                delete iceCandidateQueue[leftPeerId];
                 setPeers(prev => { const n={...prev}; delete n[leftPeerId]; return n; });
                 setRemoteStreams(prev => { const n={...prev}; delete n[leftPeerId]; return n; });
                 setRemoteScreenStreams(prev => { const n={...prev}; delete n[leftPeerId]; return n; });
