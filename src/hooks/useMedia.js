@@ -24,12 +24,15 @@ export const useMedia = () => {
           facingMode: "user"
         },
         audio: {
-          echoCancellation: { ideal: true },
-          noiseSuppression: { ideal: true },
-          autoGainControl: { ideal: false },
-          sampleRate: 48000,
-          sampleSize: 16,
-          channelCount: 1
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          // Advanced constraints to strictly force hardware-level echo cancellation on mobile
+          googEchoCancellation: true,
+          googExperimentalEchoCancellation: true,
+          googNoiseSuppression: true,
+          googHighpassFilter: true,
+          googTypingNoiseDetection: true
         }
       });
       streamRef.current = stream;
