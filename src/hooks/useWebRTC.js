@@ -59,7 +59,12 @@ export const useWebRTC = (roomId, localStream, screenStream, username, isVideoEn
   useEffect(() => { screenStreamRef.current = screenStream; }, [screenStream]);
   useEffect(() => { usernameRef.current     = username;     }, [username]);
   useEffect(() => {
-    statusRef.current = { video: isVideoEnabled, audio: isAudioEnabled, isScreenSharing: !!screenStream };
+    statusRef.current = { 
+      video: isVideoEnabled, 
+      audio: isAudioEnabled, 
+      isScreenSharing: !!screenStream,
+      screenStreamId: screenStream?.id || null
+    };
   }, [isVideoEnabled, isAudioEnabled, screenStream]);
 
   // ── Main Effect: WebSocket + WebRTC lifecycle ─────────────────────────────
@@ -175,6 +180,23 @@ export const useWebRTC = (roomId, localStream, screenStream, username, isVideoEn
         if (isUnmountedRef.current) return;
         try {
           const msg = JSON.parse(ev.data);
+
+          // ── Helper to process incoming peer status synchronously ───────────────
+          const updatePeerStatus = (senderPeerId, newStatus) => {
+            if (!newStatus) return;
+            
+            if (newStatus.isScreenSharing && newStatus.screenStreamId) {
+              if (!remoteScreenIdsRef.current[senderPeerId]) remoteScreenIdsRef.current[senderPeerId] = new Set();
+              remoteScreenIdsRef.current[senderPeerId].add(newStatus.screenStreamId);
+            } else {
+              if (remoteScreenIdsRef.current[senderPeerId]) {
+                remoteScreenIdsRef.current[senderPeerId].clear();
+              }
+              setRemoteScreenStreams(prev => { const n = { ...prev }; delete n[senderPeerId]; return n; });
+            }
+            setRemoteStatuses(prev => ({ ...prev, [senderPeerId]: newStatus }));
+          };
+
           switch (msg.type) {
 
             case 'room_state':
@@ -188,7 +210,7 @@ export const useWebRTC = (roomId, localStream, screenStream, username, isVideoEn
                 peersRef.current = n;
                 return n;
               });
-              if (peerStatus) setRemoteStatuses(prev => ({ ...prev, [senderPeerId]: peerStatus }));
+              updatePeerStatus(senderPeerId, peerStatus);
 
               let pc = rtcConnections.current[senderPeerId];
               if (!pc) pc = createPeerConnection(senderPeerId, false);
@@ -225,7 +247,7 @@ export const useWebRTC = (roomId, localStream, screenStream, username, isVideoEn
                 peersRef.current = n;
                 return n;
               });
-              if (peerStatus) setRemoteStatuses(prev => ({ ...prev, [senderPeerId]: peerStatus }));
+              updatePeerStatus(senderPeerId, peerStatus);
               const pc = rtcConnections.current[senderPeerId];
               if (pc && pc.signalingState === 'have-local-offer') {
                 await pc.setRemoteDescription(new RTCSessionDescription(sdp));
@@ -245,22 +267,7 @@ export const useWebRTC = (roomId, localStream, screenStream, username, isVideoEn
               break;
             }
 
-            // FIX: reliable screen share detection via explicit signaling message
-            case 'screen_share_state': {
-              const { senderPeerId, isSharing, streamId } = msg;
-              if (!remoteScreenIdsRef.current[senderPeerId]) remoteScreenIdsRef.current[senderPeerId] = new Set();
-              if (isSharing && streamId) {
-                remoteScreenIdsRef.current[senderPeerId].add(streamId);
-              } else {
-                remoteScreenIdsRef.current[senderPeerId].clear();
-                setRemoteScreenStreams(prev => { const n = { ...prev }; delete n[senderPeerId]; return n; });
-              }
-              setRemoteStatuses(prev => ({
-                ...prev,
-                [senderPeerId]: { ...(prev[senderPeerId] || { video: true, audio: true }), isScreenSharing: isSharing },
-              }));
-              break;
-            }
+
 
             case 'peer_leave': {
               const pid = msg.peerId;
@@ -277,7 +284,7 @@ export const useWebRTC = (roomId, localStream, screenStream, username, isVideoEn
             }
 
             case 'status_update':
-              setRemoteStatuses(prev => ({ ...prev, [msg.senderPeerId]: msg.status }));
+              updatePeerStatus(msg.senderPeerId, msg.status);
               break;
 
             case 'chat': {
@@ -340,23 +347,12 @@ export const useWebRTC = (roomId, localStream, screenStream, username, isVideoEn
     };
   }, [roomId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Broadcast AV status changes ───────────────────────────────────────────
+  // ── Broadcast AV status changes (including screen share presence) ─────────
   useEffect(() => {
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       socketRef.current.send(JSON.stringify({ type: 'status_update', status: statusRef.current }));
     }
-  }, [isVideoEnabled, isAudioEnabled]);
-
-  // ── Broadcast screen share state with stream ID (enables reliable detection) ──
-  useEffect(() => {
-    if (socketRef.current?.readyState === WebSocket.OPEN) {
-      socketRef.current.send(JSON.stringify({
-        type: 'screen_share_state',
-        isSharing: !!screenStream,
-        streamId: screenStream?.id || null,
-      }));
-    }
-  }, [screenStream]);
+  }, [isVideoEnabled, isAudioEnabled, screenStream]);
 
   // ── Keep live media tracks in sync across all peer connections ────────────
   useEffect(() => {

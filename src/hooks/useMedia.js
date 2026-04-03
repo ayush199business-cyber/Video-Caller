@@ -24,9 +24,9 @@ export const useMedia = () => {
           facingMode: "user"
         },
         audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
+          echoCancellation: { ideal: true },
+          noiseSuppression: { ideal: true },
+          autoGainControl: { ideal: false },
           sampleRate: 48000,
           sampleSize: 16,
           channelCount: 1
