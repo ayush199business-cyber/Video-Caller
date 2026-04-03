@@ -23,7 +23,14 @@ export const useMedia = () => {
           height: { ideal: 720 },
           facingMode: "user"
         },
-        audio: true
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 48000,
+          sampleSize: 16,
+          channelCount: 1
+        }
       });
       streamRef.current = stream;
       cameraVideoTrackRef.current = stream.getVideoTracks()[0];

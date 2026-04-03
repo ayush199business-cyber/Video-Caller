@@ -19,11 +19,12 @@ export const useWebRTC = (roomId, localStream, screenStream, username, isVideoEn
   const usernameRef = useRef('');
   const statusRef = useRef({ video: true, audio: true, isScreenSharing: false });
   
-  // Public Google STUN servers to bypass carrier NATs completely
+  // Public STUN servers to bypass carrier NATs and reduce connection latency
   const rtcConfig = {
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' }
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:global.stun.twilio.com:3478' }
     ]
   };
 
