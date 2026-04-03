@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { MessageSquare, Users, X } from 'lucide-react';
 import ChatPanel from './ChatPanel';
+import { VideoPlayer } from './VideoPlayer';
 
 const SidePanel = ({ 
   messages, 
