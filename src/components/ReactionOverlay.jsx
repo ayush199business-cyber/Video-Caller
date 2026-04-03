@@ -1,5 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 
+// FIX: particle data is computed once per reaction trigger via useMemo,
+// NOT inside a <style> tag with Math.random() — that pattern leaks DOM nodes on every render.
 const ReactionOverlay = ({ emoji, reactionId }) => {
   const [visible, setVisible] = useState(false);
 
@@ -11,48 +13,45 @@ const ReactionOverlay = ({ emoji, reactionId }) => {
     }
   }, [emoji, reactionId]);
 
+  // Pre-compute random particle positions once per reaction (keyed to reactionId)
+  const particles = useMemo(() =>
+    Array.from({ length: 6 }, (_, i) => ({
+      left:  `${38 + Math.random() * 24}%`,
+      tx:    `${(Math.random() - 0.5) * 160}px`,
+      delay: `${i * 0.18}s`,
+    })),
+    [reactionId] // recalculate only when a new reaction fires
+  );
+
   if (!visible) return null;
 
   return (
     <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-50 overflow-hidden">
-      <div className="animate-bounce-up text-6xl drop-shadow-2xl filter brightness-110">
+      {/* Main emoji — bounces up and fades */}
+      <div
+        className="text-6xl drop-shadow-2xl filter brightness-110"
+        style={{ animation: 'ms-bounce-up 3s ease-out forwards' }}
+      >
         {emoji}
       </div>
-      
-      {/* Small floating particles */}
-      {[...Array(6)].map((_, i) => (
-        <div 
+
+      {/* Satellite particles with inline style props — no injected <style> tags */}
+      {particles.map((p, i) => (
+        <div
           key={i}
-          className="absolute text-2xl animate-float-particle"
-          style={{ 
-            left: `${40 + Math.random() * 20}%`, 
+          className="absolute text-2xl"
+          style={{
+            left: p.left,
             top: '60%',
-            animationDelay: `${i * 0.2}s`,
-            opacity: 0
+            opacity: 0,
+            animationDelay: p.delay,
+            animation: `ms-float-particle 2s ease-out ${p.delay} forwards`,
+            '--p-tx': p.tx,
           }}
         >
           {emoji}
         </div>
       ))}
-
-      <style>{`
-        @keyframes bounce-up {
-          0% { transform: translateY(50px) scale(0.5); opacity: 0; }
-          20% { transform: translateY(-20px) scale(1.2); opacity: 1; }
-          80% { transform: translateY(-40px) scale(1); opacity: 1; }
-          100% { transform: translateY(-100px) scale(0.8); opacity: 0; }
-        }
-        @keyframes float-particle {
-          0% { transform: translate(0, 0); opacity: 0.8; }
-          100% { transform: translate(${(Math.random() - 0.5) * 150}px, -200px); opacity: 0; }
-        }
-        .animate-bounce-up {
-          animation: bounce-up 3s ease-out forwards;
-        }
-        .animate-float-particle {
-          animation: float-particle 2s ease-out forwards;
-        }
-      `}</style>
     </div>
   );
 };

@@ -1,258 +1,191 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { Copy, CheckCircle2, Users, Hand, Monitor, X, Video, ShieldCheck, ArrowRight, Cloud, ChevronDown, Mic, MicOff, VideoOff, Search } from 'lucide-react';
+import { Copy, CheckCircle2, Users, Monitor, X, Video, ShieldCheck, ArrowRight, Cloud, Mic, MicOff, VideoOff, Wifi, WifiOff } from 'lucide-react';
 import { useMedia } from '../hooks/useMedia';
 import { useWebRTC } from '../hooks/useWebRTC';
+import { useMobile } from '../hooks/useMobile';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { Controls } from '../components/Controls';
 import SidePanel from '../components/SidePanel';
-
 import { Whiteboard } from '../components/Whiteboard';
+import ErrorBoundary from '../components/ErrorBoundary';
 import { copyToClipboard } from '../utils/helpers';
 
 export const Room = () => {
   const { id: roomId } = useParams();
-  const location = useLocation();
-  const navigate = useNavigate();
-  const username = location.state?.username;
-  const [copied, setCopied] = useState(false);
-  const [isChatOpen, setIsChatOpen] = useState(false);
+  const location       = useLocation();
+  const navigate       = useNavigate();
+  const username       = location.state?.username;
+
+  const [copied,             setCopied]             = useState(false);
+  const [isChatOpen,         setIsChatOpen]         = useState(false);
   const [isParticipantsOpen, setIsParticipantsOpen] = useState(false);
-  const [theme, setTheme] = useState('dark');
-  const [isHandRaised, setIsHandRaised] = useState(false);
-  const [isMediaLoading, setIsMediaLoading] = useState(true);
-  const [meetingTitle, setMeetingTitle] = useState(location.state?.meetingName || 'Untitled Meeting');
-  const [isRecording, setIsRecording] = useState(false);
-  const [recorder, setRecorder] = useState(null);
+  const [theme,              setTheme]              = useState('dark');
+  const [isHandRaised,       setIsHandRaised]       = useState(false);
+  const [isMediaLoading,     setIsMediaLoading]     = useState(true);
+  const [meetingTitle,       setMeetingTitle]       = useState(location.state?.meetingName || 'Untitled Meeting');
+  const [isRecording,        setIsRecording]        = useState(false);
+  const [recorder,           setRecorder]           = useState(null);
   const [activeParticipantId, setActiveParticipantId] = useState('local');
-  const [panelSide, setPanelSide] = useState('right');
-  const [panelStartIndex, setPanelStartIndex] = useState(0);
-  const [activeTab, setActiveTab] = useState('chat');
-  const [isMobile, setIsMobile] = useState(false);
+  const [activeTab,          setActiveTab]          = useState('chat');
 
-  // Detect mobile
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  // FIX: single source of truth for mobile — shared useMobile hook
+  const isMobile = useMobile();
 
-  // Sync tab state when opening panels
+  // Sync tab state when toggling panels
   useEffect(() => {
-    if (isChatOpen) setActiveTab('chat');
+    if (isChatOpen)         setActiveTab('chat');
     if (isParticipantsOpen) setActiveTab('participants');
   }, [isChatOpen, isParticipantsOpen]);
 
-  // Handle local media
+  // ── Media ─────────────────────────────────────────────────────────────────
   const {
-    localStream,
-    screenStream,
-    isVideoEnabled,
-    isAudioEnabled,
-    startMedia,
-    stopMedia,
-    toggleVideo,
-    toggleAudio,
-    toggleScreenShare,
-    isScreenSharing,
-    error: mediaError
+    localStream, screenStream,
+    isVideoEnabled, isAudioEnabled,
+    startMedia, stopMedia,
+    toggleVideo, toggleAudio, toggleScreenShare,
+    isScreenSharing, error: mediaError,
   } = useMedia();
 
-  // Handle WebRTC Peers
-  const { 
-    peers, 
-    remoteStreams, 
-    remoteScreenStreams,
-    remoteStatuses, 
-    messages, 
-    sendChatMessage,
-    sendReaction,
-    raiseHand
+  // ── WebRTC ────────────────────────────────────────────────────────────────
+  const {
+    peers, remoteStreams, remoteScreenStreams, remoteStatuses,
+    messages, connectionStatus,
+    sendChatMessage, sendReaction, raiseHand,
   } = useWebRTC(roomId, localStream, screenStream, username, isVideoEnabled, isAudioEnabled);
 
+  // ── Recording ─────────────────────────────────────────────────────────────
   const handleRecording = async () => {
     if (isRecording) {
-      if (recorder) {
-        recorder.stop();
-        setIsRecording(false);
-      }
+      recorder?.stop();
+      setIsRecording(false);
       return;
     }
-
     try {
-      // Capture the browser window for the recording
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { displaySurface: "browser" },
-        audio: true
-      });
-
+      const stream       = await navigator.mediaDevices.getDisplayMedia({ video: { displaySurface: 'browser' }, audio: true });
       const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
-      const chunks = [];
-
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunks.push(e.data);
-      };
-
+      const chunks       = [];
+      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
       mediaRecorder.onstop = () => {
         const blob = new Blob(chunks, { type: 'video/webm' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `MeetSpace-Recording-${meetingTitle}-${Date.now()}.webm`;
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = `MeetSpace-${meetingTitle}-${Date.now()}.webm`;
         a.click();
-        stream.getTracks().forEach(track => track.stop());
+        URL.revokeObjectURL(url);
+        stream.getTracks().forEach(t => t.stop());
       };
-
       mediaRecorder.start();
       setRecorder(mediaRecorder);
       setIsRecording(true);
     } catch (err) {
-      console.error("Recording failed:", err);
-      // Browser will show the denied prompt automatically if NotAllowedError
+      console.error('Recording failed:', err);
     }
   };
 
-  // Start media directly on load
+  // ── Mount: start media ────────────────────────────────────────────────────
   useEffect(() => {
-    const initMedia = async () => {
-      if (username) {
-        setIsMediaLoading(true);
-        await startMedia();
-        setIsMediaLoading(false);
-      }
-    };
-    initMedia();
-    return () => {
-      stopMedia();
-    };
-  }, [username, startMedia, stopMedia]);
+    if (!username) return;
+    setIsMediaLoading(true);
+    startMedia().finally(() => setIsMediaLoading(false));
+    return () => stopMedia();
+  }, [username]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleCopyCode = async () => {
-    const success = await copyToClipboard(roomId);
-    if (success) {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
-
-  const toggleChat = () => {
-    if (isChatOpen) {
-      setIsChatOpen(false);
-    } else {
-      setIsChatOpen(true);
-      setIsParticipantsOpen(false);
-      setActiveTab('chat');
-    }
-  };
-
-  const toggleParticipants = () => {
-    if (isParticipantsOpen) {
-      setIsParticipantsOpen(false);
-    } else {
-      setIsParticipantsOpen(true);
-      setIsChatOpen(false);
-      setActiveTab('participants');
-    }
-  };
-
-  const toggleTheme = () => setTheme(prev => prev === 'dark' ? 'light' : 'dark');
-
-  const handleRaiseHand = (val) => {
-    setIsHandRaised(val);
-    raiseHand(val);
-  };
-
-  useEffect(() => {
-    if (!username) {
-      navigate('/');
-    }
-  }, [username, navigate]);
-
+  // Guard: redirect if no username (direct URL access)
+  useEffect(() => { if (!username) navigate('/'); }, [username, navigate]);
   if (!username) return (
     <div className="h-screen w-full flex items-center justify-center bg-[#0a0a0a]">
       <div className="text-white text-xs font-black uppercase tracking-[0.3em] animate-pulse">Redirecting...</div>
     </div>
   );
 
-  // Build the list of all "viewable" items (Participants + Screens)
-  const viewableItems = [
-    {
-      id: 'local',
-      type: 'camera',
-      stream: localStream,
-      username: username,
-      isLocal: true,
-      isVideoEnabled,
-      isAudioMuted: !isAudioEnabled,
-      isHandRaised,
-      status: { video: isVideoEnabled, audio: isAudioEnabled }
+  const handleCopyCode = async () => {
+    if (await copyToClipboard(roomId)) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     }
-  ];
+  };
 
-  if (screenStream) {
-    viewableItems.push({
-      id: 'local-screen',
-      type: 'screen',
-      stream: screenStream,
-      username: `${username}'s Screen`,
-      isLocal: true,
-      isVideoEnabled: true,
-      isAudioMuted: true,
-      status: { video: true, audio: false }
-    });
-  }
+  const toggleChat = () => {
+    if (isChatOpen) { setIsChatOpen(false); return; }
+    setIsChatOpen(true);
+    setIsParticipantsOpen(false);
+    setActiveTab('chat');
+  };
 
-  Object.entries(peers).forEach(([peerId, peerData]) => {
-    const status = remoteStatuses[peerId] || { video: true, audio: true };
-    
-    // Add Camera view
-    viewableItems.push({
-      id: peerId,
-      type: 'camera',
-      stream: remoteStreams[peerId],
-      username: peerData.username,
-      isLocal: false,
-      isVideoEnabled: status.video,
-      isAudioMuted: !status.audio,
-      isHandRaised: status.isHandRaised,
-      status: status
-    });
+  const toggleParticipants = () => {
+    if (isParticipantsOpen) { setIsParticipantsOpen(false); return; }
+    setIsParticipantsOpen(true);
+    setIsChatOpen(false);
+    setActiveTab('participants');
+  };
 
-    // Add Screen view if active
-    if (remoteScreenStreams[peerId] || status.isScreenSharing) {
-      viewableItems.push({
-        id: `${peerId}-screen`,
-        type: 'screen',
-        stream: remoteScreenStreams[peerId],
-        username: `${peerData.username}'s Screen`,
-        isLocal: false,
-        isVideoEnabled: true,
-        isAudioMuted: true,
-        status: { video: true, audio: false }
+  const handleRaiseHand = (val) => { setIsHandRaised(val); raiseHand(val); };
+
+  // FIX: useMemo — viewableItems was recomputed on every render including unrelated state changes
+  const viewableItems = useMemo(() => {
+    const items = [{
+      id: 'local', type: 'camera', stream: localStream, username,
+      isLocal: true, isVideoEnabled, isAudioMuted: !isAudioEnabled,
+      isHandRaised, status: { video: isVideoEnabled, audio: isAudioEnabled },
+    }];
+
+    if (screenStream) {
+      items.push({
+        id: 'local-screen', type: 'screen', stream: screenStream,
+        username: `${username}'s Screen`, isLocal: true,
+        isVideoEnabled: true, isAudioMuted: true,
+        status: { video: true, audio: false },
       });
     }
-  });
 
-  // Calculate the currently displayed large stream
-  const activeItem = viewableItems.find(item => item.id === activeParticipantId) || viewableItems[0];
+    Object.entries(peers).forEach(([peerId, peerData]) => {
+      const status = remoteStatuses[peerId] || { video: true, audio: true };
+      items.push({
+        id: peerId, type: 'camera',
+        stream: remoteStreams[peerId],
+        username: peerData.username,
+        isLocal: false,
+        isVideoEnabled: status.video,
+        isAudioMuted: !status.audio,
+        isHandRaised: status.isHandRaised,
+        status,
+      });
+      if (remoteScreenStreams[peerId] || status.isScreenSharing) {
+        items.push({
+          id: `${peerId}-screen`, type: 'screen',
+          stream: remoteScreenStreams[peerId],
+          username: `${peerData.username}'s Screen`,
+          isLocal: false, isVideoEnabled: true, isAudioMuted: true,
+          status: { video: true, audio: false },
+        });
+      }
+    });
+    return items;
+  }, [localStream, screenStream, peers, remoteStreams, remoteScreenStreams, remoteStatuses,
+      username, isVideoEnabled, isAudioEnabled, isHandRaised]);
 
-  // Pagination for side panel (5 at a time)
-  const paginatedParticipants = viewableItems.slice(panelStartIndex, panelStartIndex + 5);
-  const canGoPrev = panelStartIndex > 0;
-  const canGoNext = panelStartIndex + 5 < viewableItems.length;
+  const activeItem = viewableItems.find(i => i.id === activeParticipantId) || viewableItems[0];
 
   return (
     <div className={`h-screen w-full flex flex-col relative overflow-hidden transition-colors duration-500 ${
       theme === 'dark' ? 'bg-[#0a0a0a] text-white' : 'bg-gray-50 text-gray-900'
     }`}>
-      
-      {/* Elite Top Header */}
+
+      {/* Connection status banner */}
+      {connectionStatus === 'reconnecting' && (
+        <div className="absolute top-0 left-0 right-0 z-[100] flex items-center justify-center gap-2 py-2 bg-amber-500/90 backdrop-blur-sm text-black text-xs font-bold uppercase tracking-widest animate-slide-down">
+          <WifiOff size={14} /> Reconnecting to server...
+        </div>
+      )}
+
+      {/* Header */}
       <div className="w-full z-40 p-4 sm:p-6 flex justify-between items-center glass border-b border-white/5 backdrop-blur-3xl">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow-[0_0_20px_rgba(79,70,229,0.5)]">
-               <Video className="text-white" size={20} />
+              <Video className="text-white" size={20} />
             </div>
             <div className="flex flex-col">
               <span className="text-sm font-bold tracking-tight text-white flex items-center gap-2">
@@ -261,8 +194,8 @@ export const Room = () => {
               <div className="flex items-center gap-3 text-[10px] text-gray-400 font-bold uppercase tracking-widest">
                 <span>Meeting ID: {roomId}</span>
                 <span className={`flex items-center gap-1.5 border-l border-white/10 pl-3 transition-opacity ${isRecording ? 'opacity-100' : 'opacity-40'}`}>
-                  <div className={`w-2 h-2 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-gray-500'}`}></div>
-                  {isRecording ? 'Recording Session' : 'Ready to Record'}
+                  <div className={`w-2 h-2 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-gray-500'}`} />
+                  {isRecording ? 'Recording' : 'Ready to Record'}
                 </span>
               </div>
             </div>
@@ -274,112 +207,118 @@ export const Room = () => {
             <div className="px-3 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 font-black text-[10px] flex items-center gap-2">
               <Users size={14} /> {viewableItems.length}
             </div>
+            {/* Connection indicator */}
+            <div className={`px-2 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider flex items-center gap-1 ${
+              connectionStatus === 'connected'    ? 'text-emerald-400 bg-emerald-500/10' :
+              connectionStatus === 'reconnecting' ? 'text-amber-400 bg-amber-500/10 animate-pulse' :
+              'text-gray-500 bg-white/5'
+            }`}>
+              {connectionStatus === 'connected' ? <Wifi size={10} /> : <WifiOff size={10} />}
+              {connectionStatus}
+            </div>
             {!isMobile && (
-              <div className="relative group">
-                <button 
-                  className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 border border-indigo-400 text-white text-xs font-bold transition-all shadow-lg active:scale-95"
-                  onClick={() => window.open(`/whiteboard/${roomId}`, '_blank')}
-                >
-                   Open Elite Whiteboard <ArrowRight size={14} />
-                </button>
-              </div>
+              <button
+                className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 border border-indigo-400 text-white text-xs font-bold transition-all shadow-lg active:scale-95"
+                onClick={() => window.open(`/whiteboard/${roomId}`, '_blank')}
+              >
+                Whiteboard <ArrowRight size={14} />
+              </button>
             )}
           </div>
-          {!isMobile && (
-            <button className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-gray-400 hover:text-white transition-all">
-              <Monitor size={18} />
-            </button>
-          )}
         </div>
       </div>
 
-      {/* Backdrop for Mobile Drawer */}
+      {/* Mobile backdrop */}
       {(isParticipantsOpen || isChatOpen) && (
-        <div 
+        <div
           className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[45] animate-fade-in"
           onClick={() => { setIsParticipantsOpen(false); setIsChatOpen(false); }}
         />
       )}
 
-      {/* Main Content: Flex Row with Main View and Side Panel */}
-      <div className={`flex-grow w-full h-full flex flex-col md:flex-row overflow-hidden relative ${panelSide === 'left' ? 'md:flex-row-reverse' : ''}`}>
-        
-        {/* Main Video View Area */}
+      {/* Main layout */}
+      <div className="flex-grow w-full h-full flex flex-col md:flex-row overflow-hidden relative">
+
+        {/* Main video */}
         <div className={`flex-grow h-full flex items-center justify-center relative animate-fade-in-up ${isMobile ? 'p-2 pt-4 pb-20' : 'p-4 sm:p-8'}`}>
           {mediaError && (
             <div className="absolute top-24 left-1/2 -translate-x-1/2 bg-red-500/20 text-red-400 border border-red-500/30 px-6 py-3 rounded-2xl z-50 backdrop-blur-md shadow-lg animate-shake">
               {mediaError}
             </div>
           )}
-
           <div className={`w-full h-full flex items-center justify-center bg-white/5 overflow-hidden border border-white/10 relative group ${
             isMobile ? 'rounded-[24px] max-h-[60vh]' : 'max-w-6xl max-h-[85vh] sm:max-h-[80vh] rounded-[32px] sm:rounded-[40px] shadow-[0_20px_80px_-20px_rgba(79,70,229,0.3)]'
           }`}>
-             <div className="absolute -top-32 -left-32 w-64 h-64 bg-indigo-500/10 blur-[100px] pointer-events-none transition-all group-hover:bg-indigo-500/20"></div>
-             
-             {isMediaLoading ? (
-               <div className="flex flex-col items-center gap-6 text-gray-500">
-                  <div className="relative">
-                    <div className="absolute inset-0 bg-indigo-500/20 blur-2xl rounded-full animate-pulse scale-150"></div>
-                    <div className="relative p-8 bg-white/5 rounded-full border border-white/10 animate-fade-in">
-                      <Cloud size={64} className="text-indigo-400 opacity-80" />
-                    </div>
+            <div className="absolute -top-32 -left-32 w-64 h-64 bg-indigo-500/10 blur-[100px] pointer-events-none transition-all group-hover:bg-indigo-500/20" />
+
+            {isMediaLoading ? (
+              <div className="flex flex-col items-center gap-6 text-gray-500">
+                <div className="relative">
+                  <div className="absolute inset-0 bg-indigo-500/20 blur-2xl rounded-full animate-pulse scale-150" />
+                  <div className="relative p-8 bg-white/5 rounded-full border border-white/10 animate-fade-in">
+                    <Cloud size={64} className="text-indigo-400 opacity-80" />
                   </div>
-                  <div className="flex flex-col items-center gap-2">
-                    <p className="font-black tracking-[0.2em] uppercase text-[10px] text-white/50">Establishing Secure P2P Tunnel...</p>
-                    <div className="w-48 h-1 bg-white/5 rounded-full overflow-hidden">
-                      <div className="w-1/2 h-full bg-indigo-500 animate-[loading_1.5s_infinite]"></div>
-                    </div>
+                </div>
+                <div className="flex flex-col items-center gap-2">
+                  <p className="font-black tracking-[0.2em] uppercase text-[10px] text-white/50">Requesting Camera & Mic...</p>
+                  <div className="w-48 h-1 bg-white/5 rounded-full overflow-hidden">
+                    <div className="w-1/2 h-full bg-indigo-500 animate-[loading_1.5s_infinite]" />
                   </div>
-               </div>
-             ) : activeItem ? (
-               <VideoPlayer 
-                  stream={activeItem.stream} 
+                </div>
+              </div>
+            ) : activeItem ? (
+              // FIX: wrapped in ErrorBoundary — a bad stream won't crash the whole Room
+              <ErrorBoundary>
+                <VideoPlayer
+                  stream={activeItem.stream}
                   isLocal={activeItem.isLocal}
                   username={activeItem.username}
                   isAudioMuted={activeItem.isAudioMuted}
                   isVideoEnabled={activeItem.isVideoEnabled}
                   isHandRaised={activeItem.isHandRaised}
+                  lastReaction={activeItem.status?.lastReaction}
+                  reactionId={activeItem.status?.reactionId}
                   type={activeItem.type}
-               />
-             ) : null}
+                />
+              </ErrorBoundary>
+            ) : null}
           </div>
         </div>
 
-        {/* Side Panel Area: Persistent Elite Participants List */}
-        <div 
-          className={`
-            fixed md:relative top-0 right-0 h-full w-[85%] md:w-80 max-w-sm md:max-w-none z-[50] md:z-30
-            transition-all duration-500 ease-in-out
-            ${(isParticipantsOpen || isChatOpen) ? 'translate-x-0' : 'translate-x-full'}
-          `}
-        >
-          <SidePanel 
-            messages={messages}
-            onSendMessage={sendChatMessage}
-            onClose={() => { setIsChatOpen(false); setIsParticipantsOpen(false); }}
-            peers={peers}
-            username={username}
-            remoteStatuses={remoteStatuses}
-            isAudioEnabled={isAudioEnabled}
-            isVideoEnabled={isVideoEnabled}
-            isHandRaised={isHandRaised}
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
-            remoteStreams={remoteStreams}
-            remoteScreenStreams={remoteScreenStreams}
-            localStream={localStream}
-            screenStream={screenStream}
-            isLocalHandRaised={isHandRaised}
-            onSelectParticipant={(id) => setActiveParticipantId(id)}
-            activeParticipantId={activeParticipantId}
-            isMobile={isMobile}
-          />
+        {/* Side panel */}
+        <div className={`
+          fixed md:relative top-0 right-0 h-full w-[85%] md:w-80 max-w-sm md:max-w-none z-[50] md:z-30
+          transition-all duration-500 ease-in-out
+          ${(isParticipantsOpen || isChatOpen) ? 'translate-x-0' : 'translate-x-full'}
+        `}>
+          <ErrorBoundary>
+            <SidePanel
+              messages={messages}
+              onSendMessage={sendChatMessage}
+              onClose={() => { setIsChatOpen(false); setIsParticipantsOpen(false); }}
+              peers={peers}
+              username={username}
+              remoteStatuses={remoteStatuses}
+              isAudioEnabled={isAudioEnabled}
+              isVideoEnabled={isVideoEnabled}
+              isHandRaised={isHandRaised}
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              remoteStreams={remoteStreams}
+              remoteScreenStreams={remoteScreenStreams}
+              localStream={localStream}
+              screenStream={screenStream}
+              isLocalHandRaised={isHandRaised}
+              onSelectParticipant={(id) => setActiveParticipantId(id)}
+              activeParticipantId={activeParticipantId}
+              isMobile={isMobile}
+            />
+          </ErrorBoundary>
         </div>
       </div>
 
-      {/* Controls Overlay */}
-      <Controls 
+      {/* Controls */}
+      <Controls
         isAudioEnabled={isAudioEnabled}
         isVideoEnabled={isVideoEnabled}
         isChatOpen={isChatOpen}
@@ -388,26 +327,19 @@ export const Room = () => {
         toggleAudio={toggleAudio}
         toggleVideo={toggleVideo}
         toggleChat={toggleChat}
-        toggleScreenShare={toggleScreenShare} 
+        toggleScreenShare={toggleScreenShare}
         raiseHand={handleRaiseHand}
         sendReaction={sendReaction}
         isParticipantsOpen={isParticipantsOpen}
         toggleParticipants={toggleParticipants}
         theme={theme}
-        toggleTheme={toggleTheme}
+        toggleTheme={() => setTheme(p => p === 'dark' ? 'light' : 'dark')}
         toggleWhiteboard={() => window.open(`/whiteboard/${roomId}`, '_blank')}
         stopMedia={stopMedia}
         isRecording={isRecording}
         toggleRecording={handleRecording}
         isMobile={isMobile}
       />
-
-      <style>{`
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
-      `}</style>
     </div>
   );
 };

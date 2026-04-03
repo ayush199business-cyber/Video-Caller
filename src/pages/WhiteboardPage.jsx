@@ -1,19 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useParams } from 'react-router-dom';
 import { Whiteboard } from '../components/Whiteboard';
 import { useWhiteboardSync } from '../hooks/useWhiteboardSync';
+import { useMobile } from '../hooks/useMobile';
 
 export const WhiteboardPage = () => {
   const { id: roomId } = useParams();
-  const { broadcastElements, remoteElements } = useWhiteboardSync(roomId, 'Whiteboard User');
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  // FIX: uses shared useMobile hook instead of duplicated useEffect
+  const isMobile = useMobile();
+  // FIX: removed unused 'username' argument from useWhiteboardSync
+  const { broadcastElements, remoteElements } = useWhiteboardSync(roomId);
 
   return (
     <div className="h-screen w-full bg-[#f8f9fa] overflow-hidden flex flex-col">
@@ -25,10 +21,10 @@ export const WhiteboardPage = () => {
           MeetSpace Live Whiteboard
         </div>
       </div>
-      <Whiteboard 
-        onClose={() => window.close()} 
+      <Whiteboard
+        onClose={() => window.close()}
         isStandalone={true}
-        onElementsUpdate={(elements) => broadcastElements(elements)}
+        onElementsUpdate={broadcastElements}
         remoteElements={remoteElements}
         isMobile={isMobile}
       />

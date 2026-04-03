@@ -232,9 +232,9 @@ export const Home = () => {
 
       {/* Bottom Features/Stats Bar */}
       <footer className="max-w-7xl mx-auto w-full px-6 py-12 grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in-up [animation-delay:400ms]">
-        <StatCard icon={<Users size={24} className="text-indigo-400" />} title="3.2M+" subtitle="Meetings Created" />
-        <StatCard icon={<Clock size={24} className="text-emerald-400" />} title="Instant" subtitle="Join Time" />
-        <StatCard icon={<ShieldCheck size={24} className="text-sky-400" />} title="End-to-End" subtitle="Encrypted" />
+        <StatCard icon={<Users size={24} className="text-indigo-400" />} title="P2P" subtitle="No server sees your video" />
+        <StatCard icon={<Clock size={24} className="text-emerald-400" />} title="Instant" subtitle="Zero wait, zero install" />
+        <StatCard icon={<ShieldCheck size={24} className="text-sky-400" />} title="DTLS/SRTP" subtitle="Encrypted media transport" />
       </footer>
 
       <style>{`
