@@ -17,6 +17,16 @@ export const Room = () => {
   const username = location.state?.username;
   const [copied, setCopied] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isParticipantsOpen, setIsParticipantsOpen] = useState(false);
+  const [theme, setTheme] = useState('dark');
+  const [isHandRaised, setIsHandRaised] = useState(false);
+  const [isMediaLoading, setIsMediaLoading] = useState(true);
+  const [meetingTitle, setMeetingTitle] = useState(location.state?.meetingName || 'Untitled Meeting');
+  const [isRecording, setIsRecording] = useState(false);
+  const [recorder, setRecorder] = useState(null);
+  const [activeParticipantId, setActiveParticipantId] = useState('local');
+  const [panelSide, setPanelSide] = useState('right');
+  const [panelStartIndex, setPanelStartIndex] = useState(0);
   const [activeTab, setActiveTab] = useState('chat');
   const [isMobile, setIsMobile] = useState(false);
 
