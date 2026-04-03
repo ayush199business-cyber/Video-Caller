@@ -22,7 +22,8 @@ export const Controls = ({
   sendReaction, isParticipantsOpen, toggleParticipants, theme, toggleTheme,
   toggleWhiteboard,
   isRecording, toggleRecording,
-  stopMedia 
+  stopMedia,
+  isMobile
 }) => {
   const navigate = useNavigate();
 
@@ -32,79 +33,85 @@ export const Controls = ({
   };
 
   return (
-    <div className="fixed bottom-0 left-0 w-full p-6 sm:p-10 pointer-events-none z-[60] flex justify-center">
-      <div className="flex items-center gap-2 sm:gap-4 px-6 py-4 bg-[#0d0f14]/80 backdrop-blur-2xl rounded-full border border-white/5 shadow-2xl pointer-events-auto transition-transform hover:scale-[1.01] active:translate-y-1">
+    <div className={`fixed bottom-0 left-0 w-full p-4 sm:p-10 pointer-events-none z-[60] flex justify-center ${isMobile ? 'pb-8' : ''}`}>
+      <div className={`flex items-center gap-2 sm:gap-4 px-4 sm:px-6 py-3 sm:py-4 bg-[#0d0f14]/80 backdrop-blur-2xl rounded-full border border-white/5 shadow-2xl pointer-events-auto transition-transform hover:scale-[1.01] active:translate-y-1 ${isMobile ? 'scale-90 sm:scale-100' : ''}`}>
         
         {/* Media Group */}
-        <div className="flex items-center gap-2 pr-4 border-r border-white/10">
+        <div className="flex items-center gap-1.5 sm:gap-2 pr-2 sm:pr-4 border-r border-white/10">
           <ControlBtn 
             active={!isAudioEnabled} 
             onClick={toggleAudio} 
-            icon={isAudioEnabled ? <Mic size={20} /> : <MicOff size={20} />} 
+            icon={isAudioEnabled ? <Mic size={isMobile ? 18 : 20} /> : <MicOff size={isMobile ? 18 : 20} />} 
             title={isAudioEnabled ? 'Mute' : 'Unmute'}
             danger={!isAudioEnabled}
           />
           <ControlBtn 
             active={!isVideoEnabled} 
             onClick={toggleVideo} 
-            icon={isVideoEnabled ? <Video size={20} /> : <VideoOff size={20} />} 
+            icon={isVideoEnabled ? <Video size={isMobile ? 18 : 20} /> : <VideoOff size={isMobile ? 18 : 20} />} 
             title={isVideoEnabled ? 'Stop Video' : 'Start Video'}
             danger={!isVideoEnabled}
           />
         </div>
 
         {/* Interaction Group */}
-        <div className="flex items-center gap-2 px-2 border-r border-white/10">
+        <div className={`flex items-center gap-1.5 sm:gap-2 ${isMobile ? 'px-1' : 'px-2'} border-r border-white/10`}>
           <ControlBtn 
             active={isParticipantsOpen} 
             onClick={toggleParticipants} 
-            icon={<Users size={20} />} 
+            icon={<Users size={isMobile ? 18 : 20} />} 
             title="Participants"
           />
           <ControlBtn 
             active={isChatOpen} 
             onClick={toggleChat} 
-            icon={<MessageSquare size={20} />} 
+            icon={<MessageSquare size={isMobile ? 18 : 20} />} 
             title="Chat"
           />
-          <ControlBtn 
-            onClick={toggleWhiteboard} 
-            icon={<Pencil size={20} />} 
-            title="Open Standalone Whiteboard"
-            indigo={true}
-          />
-          <ControlBtn 
-            active={isRecording} 
-            onClick={toggleRecording} 
-            icon={<div className={`w-3 h-3 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-gray-500'}`} />} 
-            title={isRecording ? 'Stop Recording' : 'Start Recording'}
-            danger={isRecording}
-          />
-          <ControlBtn 
-            active={isScreenSharing} 
-            onClick={toggleScreenShare} 
-            icon={<Share2 size={20} />} 
-            title="Share Screen"
-            emerald={isScreenSharing}
-          />
+          {!isMobile && (
+            <>
+              <ControlBtn 
+                onClick={toggleWhiteboard} 
+                icon={<Pencil size={20} />} 
+                title="Open Standalone Whiteboard"
+                indigo={true}
+              />
+              <ControlBtn 
+                active={isRecording} 
+                onClick={toggleRecording} 
+                icon={<div className={`w-3 h-3 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-gray-500'}`} />} 
+                title={isRecording ? 'Stop Recording' : 'Start Recording'}
+                danger={isRecording}
+              />
+              <ControlBtn 
+                active={isScreenSharing} 
+                onClick={toggleScreenShare} 
+                icon={<Share2 size={20} />} 
+                title="Share Screen"
+                emerald={isScreenSharing}
+              />
+            </>
+          )}
         </div>
 
-        {/* More Options */}
-        <div className="flex items-center gap-2 px-2">
-          <ControlBtn 
-            icon={<MoreHorizontal size={20} />} 
-            title="More Options"
-          />
-        </div>
+        {/* More Options - Only for Desktop */}
+        {!isMobile && (
+          <div className="flex items-center gap-2 px-2">
+            <ControlBtn 
+              icon={<MoreHorizontal size={20} />} 
+              title="More Options"
+            />
+          </div>
+        )}
 
         {/* Leave Group */}
-        <div className="pl-4">
+        <div className={`${isMobile ? 'pl-2' : 'pl-4'}`}>
           <button 
             onClick={handleLeave}
-            className="flex items-center gap-3 px-6 py-3 rounded-2xl bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white border border-rose-500/20 hover:border-rose-500 transition-all font-bold text-sm shadow-lg hover:shadow-rose-500/40 group"
+            className={`flex items-center gap-2 sm:gap-3 px-4 sm:px-6 py-2 sm:py-3 rounded-2xl bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white border border-rose-500/20 hover:border-rose-500 transition-all font-bold text-sm shadow-lg hover:shadow-rose-500/40 group`}
           >
-            <PhoneOff size={20} className="group-hover:-rotate-[135deg] transition-transform duration-500" />
-            <span className="hidden sm:inline">Leave Meeting</span>
+            <PhoneOff size={isMobile ? 18 : 20} className="group-hover:-rotate-[135deg] transition-transform duration-500" />
+            {!isMobile && <span className="hidden sm:inline">Leave Meeting</span>}
           </button>
         </div>
       </div>

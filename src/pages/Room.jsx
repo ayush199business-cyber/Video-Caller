@@ -17,18 +17,22 @@ export const Room = () => {
   const username = location.state?.username;
   const [copied, setCopied] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [isParticipantsOpen, setIsParticipantsOpen] = useState(false); // Default hidden for mobile
-  const [theme, setTheme] = useState('dark');
-  const [isHandRaised, setIsHandRaised] = useState(false);
-  const [isMediaLoading, setIsMediaLoading] = useState(true);
-  const [meetingTitle, setMeetingTitle] = useState(location.state?.meetingName || 'Untitled Meeting');
-  const [isRecording, setIsRecording] = useState(false);
-  const [recorder, setRecorder] = useState(null);
+  const [activeTab, setActiveTab] = useState('chat');
+  const [isMobile, setIsMobile] = useState(false);
 
-  // New Interface States
-  const [activeParticipantId, setActiveParticipantId] = useState('local');
-  const [panelSide, setPanelSide] = useState('right');
-  const [panelStartIndex, setPanelStartIndex] = useState(0);
+  // Detect mobile
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Sync tab state when opening panels
+  useEffect(() => {
+    if (isChatOpen) setActiveTab('chat');
+    if (isParticipantsOpen) setActiveTab('participants');
+  }, [isChatOpen, isParticipantsOpen]);
 
   // Handle local media
   const {
@@ -123,13 +127,23 @@ export const Room = () => {
   };
 
   const toggleChat = () => {
-    setIsChatOpen(!isChatOpen);
-    if (isParticipantsOpen) setIsParticipantsOpen(false);
+    if (isChatOpen) {
+      setIsChatOpen(false);
+    } else {
+      setIsChatOpen(true);
+      setIsParticipantsOpen(false);
+      setActiveTab('chat');
+    }
   };
 
   const toggleParticipants = () => {
-    setIsParticipantsOpen(!isParticipantsOpen);
-    if (isChatOpen) setIsChatOpen(false);
+    if (isParticipantsOpen) {
+      setIsParticipantsOpen(false);
+    } else {
+      setIsParticipantsOpen(true);
+      setIsChatOpen(false);
+      setActiveTab('participants');
+    }
   };
 
   const toggleTheme = () => setTheme(prev => prev === 'dark' ? 'light' : 'dark');
@@ -250,18 +264,22 @@ export const Room = () => {
             <div className="px-3 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 font-black text-[10px] flex items-center gap-2">
               <Users size={14} /> {viewableItems.length}
             </div>
-            <div className="relative group">
-              <button 
-                className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 border border-indigo-400 text-white text-xs font-bold transition-all shadow-lg active:scale-95"
-                onClick={() => window.open(`/whiteboard/${roomId}`, '_blank')}
-              >
-                 Open Elite Whiteboard <ArrowRight size={14} />
-              </button>
-            </div>
+            {!isMobile && (
+              <div className="relative group">
+                <button 
+                  className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 border border-indigo-400 text-white text-xs font-bold transition-all shadow-lg active:scale-95"
+                  onClick={() => window.open(`/whiteboard/${roomId}`, '_blank')}
+                >
+                   Open Elite Whiteboard <ArrowRight size={14} />
+                </button>
+              </div>
+            )}
           </div>
-          <button className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-gray-400 hover:text-white transition-all">
-            <Monitor size={18} />
-          </button>
+          {!isMobile && (
+            <button className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-gray-400 hover:text-white transition-all">
+              <Monitor size={18} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -277,14 +295,16 @@ export const Room = () => {
       <div className={`flex-grow w-full h-full flex flex-col md:flex-row overflow-hidden relative ${panelSide === 'left' ? 'md:flex-row-reverse' : ''}`}>
         
         {/* Main Video View Area */}
-        <div className="flex-grow h-full p-2 sm:p-8 flex items-center justify-center relative animate-fade-in-up">
+        <div className={`flex-grow h-full flex items-center justify-center relative animate-fade-in-up ${isMobile ? 'p-2 pt-4 pb-20' : 'p-4 sm:p-8'}`}>
           {mediaError && (
             <div className="absolute top-24 left-1/2 -translate-x-1/2 bg-red-500/20 text-red-400 border border-red-500/30 px-6 py-3 rounded-2xl z-50 backdrop-blur-md shadow-lg animate-shake">
               {mediaError}
             </div>
           )}
 
-          <div className="w-full h-full max-w-6xl max-h-[85vh] sm:max-h-[80vh] flex items-center justify-center bg-white/5 rounded-[32px] sm:rounded-[40px] overflow-hidden shadow-[0_20px_80px_-20px_rgba(79,70,229,0.3)] border border-white/10 relative group">
+          <div className={`w-full h-full flex items-center justify-center bg-white/5 overflow-hidden border border-white/10 relative group ${
+            isMobile ? 'rounded-[24px] max-h-[60vh]' : 'max-w-6xl max-h-[85vh] sm:max-h-[80vh] rounded-[32px] sm:rounded-[40px] shadow-[0_20px_80px_-20px_rgba(79,70,229,0.3)]'
+          }`}>
              <div className="absolute -top-32 -left-32 w-64 h-64 bg-indigo-500/10 blur-[100px] pointer-events-none transition-all group-hover:bg-indigo-500/20"></div>
              
              {isMediaLoading ? (
@@ -334,7 +354,16 @@ export const Room = () => {
             isAudioEnabled={isAudioEnabled}
             isVideoEnabled={isVideoEnabled}
             isHandRaised={isHandRaised}
-            initialTab={isChatOpen ? 'chat' : 'participants'}
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            remoteStreams={remoteStreams}
+            remoteScreenStreams={remoteScreenStreams}
+            localStream={localStream}
+            screenStream={screenStream}
+            isLocalHandRaised={isHandRaised}
+            onSelectParticipant={(id) => setActiveParticipantId(id)}
+            activeParticipantId={activeParticipantId}
+            isMobile={isMobile}
           />
         </div>
       </div>
@@ -360,6 +389,7 @@ export const Room = () => {
         stopMedia={stopMedia}
         isRecording={isRecording}
         toggleRecording={handleRecording}
+        isMobile={isMobile}
       />
 
       <style>{`

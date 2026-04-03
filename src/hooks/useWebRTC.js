@@ -76,34 +76,48 @@ export const useWebRTC = (roomId, localStream, screenStream, username, isVideoEn
 
       // Handle raw stream payload delivery
       pc.ontrack = (event) => {
-         const remoteStream = event.streams[0];
-         if (remoteStream) {
-            // Distinguish between camera and screen share
-            const isScreen = remoteStream.getTracks().some(t => 
-              t.label.toLowerCase().includes('screen') || 
-              t.label.toLowerCase().includes('window') ||
-              remoteStream.id.includes('screen')
-            );
-            
-            if (isScreen) {
-              setRemoteScreenStreams(prev => ({ ...prev, [targetPeerId]: remoteStream }));
-            } else {
-              setRemoteStreams(prev => ({ ...prev, [targetPeerId]: remoteStream }));
-            }
-            
-            // Critical Resilience: Wait for track to be unmuted (actively receiving data)
-            event.track.onunmute = () => {
-              console.log(`Track unmuted for ${targetPeerId}:`, event.track.kind);
-              setRemoteStatuses(prev => ({ 
-                ...prev, 
-                [targetPeerId]: { 
-                  ...(prev[targetPeerId] || {}), 
-                  video: true, 
-                  audio: true 
-                } 
-              }));
-            };
+         const targetStream = event.streams[0] || new MediaStream();
+         
+         // Distinguish between camera and screen share
+         // Screen tracks usually have 'screen' or 'window' in their label
+         const isScreen = event.track.label.toLowerCase().includes('screen') || 
+                          event.track.label.toLowerCase().includes('window') ||
+                          (event.streams[0]?.id && event.streams[0].id.includes('screen'));
+         
+         if (isScreen) {
+           setRemoteScreenStreams(prev => {
+             const existing = prev[targetPeerId] || new MediaStream();
+             if (!existing.getTracks().find(t => t.id === event.track.id)) {
+               existing.addTrack(event.track);
+             }
+             return { ...prev, [targetPeerId]: existing };
+           });
+         } else {
+           setRemoteStreams(prev => {
+             const existing = prev[targetPeerId] || new MediaStream();
+             if (!existing.getTracks().find(t => t.id === event.track.id)) {
+               existing.addTrack(event.track);
+             }
+             return { ...prev, [targetPeerId]: existing };
+           });
          }
+         
+         // Critical Resilience: Ensure track is unmuted and state is updated
+         event.track.onunmute = () => {
+           console.log(`Track unmuted for ${targetPeerId}:`, event.track.kind);
+           setRemoteStatuses(prev => ({ 
+             ...prev, 
+             [targetPeerId]: { 
+               ...(prev[targetPeerId] || {}), 
+               [event.track.kind]: true 
+             } 
+           }));
+         };
+
+         // If track ends, check if we need to remove it
+         event.track.onended = () => {
+           console.log(`Track ended for ${targetPeerId}:`, event.track.kind);
+         };
       };
 
       // SDP Negotiation
